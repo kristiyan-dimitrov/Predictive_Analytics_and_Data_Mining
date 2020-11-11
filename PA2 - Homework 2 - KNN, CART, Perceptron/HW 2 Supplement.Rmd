@@ -1,0 +1,297 @@
+---
+title: "HW 2 - Supplemental"
+author: "Kristiyan Dimitrov"
+date: "2/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+# Problem 4
+```{r common,include=FALSE, echo=FALSE}
+library(car)
+library(readxl)
+library(tidyverse)
+library(psycho)
+library(caret)
+library(nlme)
+library(DescTools)
+library(nnet)
+library(RSNNS)
+library(rpart)
+library(ModelMetrics)
+library(rpart)
+# install.packages('ALEPlot')
+library(ALEPlot)
+set.seed(42)
+CVInd <- function(n,K) { # n is sample size; K is number of parts; # returns K-length list of indices for each part
+  m<-floor(n/K) #approximate size of each part
+  r<-n-m*K
+  I<-sample(n,n) #random reordering of the indices
+  Ind<-list() #will be list of indices for all K parts
+  length(Ind)<-K
+  for (k in 1:K) {
+    if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+    else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+    Ind[[k]] <- I[kpart] #indices for kth part of data
+  }
+  Ind
+}
+
+# I will create a function because the code is very long and I don't want to repeat it
+tenFoldCVtenRepThreeModels = function(linout, size, decay) {
+
+Nrep<-10 #number of replicates of CV
+K<-10  #K-fold CV on each replicate
+n.models = 3 #number of different models to fit
+n=nrow(fgl.standardized)
+y<-fgl.standardized[['type']]
+yhat=matrix(0,n,n.models)
+CV.rate<-matrix(0,Nrep,n.models)
+for (j in 1:Nrep) {
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+    # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+    out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[1], skip=F, size=size[1], decay=decay[1], maxit=1000, trace=F)
+    # Make predictions with our model on the Validation Data set
+    for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+      phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+      typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+      yhat[i,1] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+    }
+
+    # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+    out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[2], skip=F, size=size[2], decay=decay[2], maxit=1000, trace=F)
+    # Make predictions with our model on the Validation Data set
+    for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+      phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+      typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+      yhat[i,2] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+    }
+    
+    # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+    out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[3], skip=F, size=size[3], decay=decay[3], maxit=1000, trace=F)
+    # Make predictions with our model on the Validation Data set
+    for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+      phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+      typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+      yhat[i,3] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+    }
+     
+  } #end of k loop
+  CV.rate[j,]=apply(yhat,2,function(x) sum(y != x)/n)
+} #end of j loop
+# CV.rate
+CV.rateAve<- apply(CV.rate,2,mean); CV.rateAve #averaged CV misclass rate
+return(list(CV.rate, CV.rateAve))
+}
+
+
+```
+
+# Problem 4
+
+Importing Data
+
+```{r}
+library(MASS)
+########### Problem 4 begins here ################### 
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+str(fgl)
+```
+
+### a) - Fitting a Neural Net
+
+I need to create a STANDARDIZED VERSION of the data
+
+```{r}
+### I'll also need to create a STANDARDIZED VERSION of the data
+fgl.standardized = standardize(fgl)
+fgl.standardized = as.data.frame(fgl.standardized) # Converting to DataFrame
+fgl.standardized[['type']] = as.factor(fgl.standardized[['type']])
+types = levels(fgl.standardized[['type']]) # Extracting the levels of the response variable. These will be needed for making predictions
+str(fgl.standardized)
+```
+
+
+Now, I will do 10-fold Cross Validation, with 10 different randomized splits of the data i.e. Nrep = 10
+I will be comparing 3 models at a time. More specifically, 3 different Neural Networks with different hyperparameters
+First, I try:
+linout = F, size = 10, decay = .01
+linout = F, size = 10, decay = .05
+linout = F, size = 10, decay = .1
+
+```{r}
+linout = c(F,F,F)
+size = c(10,10,10)
+decay = c(.01,.05,.1)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+decay = .05 gives the lowest CV-Misclassification Rate.
+Now I will try with values closer to .05. 
+After several repetitions, which I will not display here for brevity, I find that the optimal decay is .04
+I observe that on subsequent iterations the same inputs would lead to a different conclusion.
+Therefore, I'm in the realm of uncertainty.
+
+```{r}
+linout = c(F,F,F)
+size = c(10,10,10)
+decay = c(.035,.037,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+What about the size of the hidden layer?
+I will try different values: (7,10,12), (5,12,15), (8,15,20), (12,20,30), (30,40,50), (25,30,35), (25,27,33), (23,25,26)
+The values above are my progression in hunting down the best value. It turns out the best value is: 25
+
+```{r}
+linout = c(F,F,F)
+size = c(23,25,26)
+decay = c(.04,.04,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+Finally, I will check if a linear output or logistic is better
+
+```{r}
+linout = c(F,T,T)
+size = c(25,25,25)
+decay = c(.04,.04,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+Linear Output actually gives slightly better results!
+
+To summarize, the best NN is with decay = .04, size = 25, linout = T.
+I'll fit this best NN and make predictions with it on the training data
+
+```{r}
+bestNN = nnet(type ~ ., fgl.standardized, linout=T, skip=F, size=25, decay=.04, maxit=1000, trace=F)
+phat = predict(bestNN, fgl.standardized[,c(1:9)])
+yhat = c()
+for (i in 1:length(phat[,1])){
+   typePrediction = types[which.max(phat[i,])]
+   yhat = c(yhat, typePrediction)
+}
+1-sum(yhat==y)/length(y)
+```
+
+```{r}
+table(yhat, y)
+```
+
+The NN appears to be doing very well on the training data, but this shouldn't fool us.
+The cross validation results showed us that the best the NN can do witn new data
+is around 26.8% misclassification rate.
+
+### b) Fitting a Classification Tree
+
+```{r}
+# library(MASS)
+########### Problem 4 begins here ################### 
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+# str(fgl)
+```
+
+The best cp appears to be at .046 judging by the graph below
+
+```{r, fig.height=3}
+classTree = rpart(type ~ ., data = fgl, method = 'class', xval = 10) # Fitting Classification Tree
+plotcp(classTree)
+```
+
+Output of printcp()
+
+```{r}
+printcp(classTree)
+```
+
+From the graph and the table, it appears that the best cp is .03623 with 4 splits.
+I'll now use this value to prune back the tree
+
+```{r}
+bestClassTree = prune(classTree, cp = 0.03623)
+bestClassTree$variable.importance
+```
+
+```{r}
+# install.packages("rpart.plot")
+rpart.plot::rpart.plot(bestClassTree, uniform = F)
+?plot.rpart
+```
+
+Will calculate a classification error for the tree on its training data
+
+```{r}
+y = fgl$type
+phat = predict(bestClassTree, fgl[,c(1:9)])
+yhat = c()
+for (i in 1:length(phat[,1])){
+   typePrediction = types[which.max(phat[i,])]
+   yhat = c(yhat, typePrediction)
+}
+1-sum(yhat==y)/length(y)
+```
+
+Here's a confusion matrix for the tree predictions
+
+```{r}
+table(yhat, y)
+```
+
+
+### c) - Logistic Regression
+
+First I fit a logistic Regression. A preliminary step I've taken is to factor the response variable type
+
+```{r}
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+fgl[['type']] = as.factor(fgl[['type']])
+nominalFit = multinom(type ~ . , data = fgl, maxit = 1000)
+summary(nominalFit)
+```
+
+below I calculate the p-values, because they are not provided by default
+
+```{r}
+z = summary(nominalFit)$coefficients / summary(nominalFit)$standard.errors
+p = (1 - pnorm(abs(z),0,1))*2
+p
+```
+
+Some predictors are insignificant when predicting for some of the response classes.
+I'll make predictions on the training data with this model and calculate the classification error
+
+```{r}
+yhat = factor(predict(nominalFit, fgl[,c(1:9)]))
+y = fgl$type
+# 1-sum(y == yhat)/length(y)
+ce(actual = y, predicted = yhat)
+```
+
+Useful to look at confusion matrix as well
+
+```{r}
+table(yhat, y)
+```
+
+### d) - Reviewing the results
+
+Overall, it looks like the logistic regression and the Classification Tree get the exact same misclassification rate of approx. 27%
+However, they have differing precision when it comes to the different classes.
+So, if we had a preference for making a prediction about a specific class, we could use the model which is more accurate for that class.
+
+The Neural Net, although doing very well on the entire training data (due to its extreme flexibility) still didn't bring any advantage over the other two models. It too had a misclassification rate of approximately 27%.
+
+My conclusion is that, with this dataset, that's probably just the best that we can do. As discussed above, Iw ould use the Logistic Regression or the Classification Tree depending on the usecase and keep the Neural Network as a back up if in the future we get a lot more data. I wouldn't use the NN for this situation, because it takes too long to fit.
+
+
+

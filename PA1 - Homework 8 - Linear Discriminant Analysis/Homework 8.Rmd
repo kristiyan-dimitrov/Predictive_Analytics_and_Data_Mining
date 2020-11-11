@@ -1,0 +1,178 @@
+---
+title: "Homework 8"
+author: "Kristiyan Dimitrov, Jieda Li, Parth Patel, Kristian Nikolov"
+date: "11/29/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exercise 8.5
+### a)
+
+```{r}
+# Import Data
+iris = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Iris.csv")
+str(iris)
+```
+
+```{r}
+library(MASS)
+irisLDA = lda(Species_name ~ Petal_width + Petal_length + Sepal_width + Sepal_length, data = iris, prior=c(1,1,1)/3) # Calculate Fisher's Linear Discriminant Functions
+irisLDA # At the very end of the output we can see that most of the separability is captured by the first Linear Discriminant Function (LD1 - 99.12%)
+```
+```{r}
+irisLDA[4] # These are the coefficients of the Fisher Discriminant functions
+```
+
+### b)
+
+```{r}
+predict( irisLDA, newdata = data.frame(Sepal_width = 3, Sepal_length = 5.5, Petal_width = 1.5, Petal_length = 4))
+```
+We see that Versicolor has the highest probability therefore we would classify this observation as Versicolor
+
+## Exercise 9.3
+
+```{r}
+# Import Data
+injury = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Airline-Injury.csv")
+str(injury)
+```
+```{r}
+plot(injury)
+```
+
+### Part 1 - Simple linear regression with no transformation on y
+
+```{r}
+# Using lm() function
+lmfit = lm(y ~ x, data = injury)
+summary(lmfit)
+```
+```{r}
+# We check the SSE for the lm model
+anova(lmfit)[2,2]
+```
+
+```{r}
+# Verifying SSE by direct calculation
+sum(lmfit$residuals^2)
+```
+
+```{r}
+# Using glm() function
+linearRegression = glm(y ~ x, data = injury, family = gaussian)
+summary(linearRegression)
+```
+
+```{r}
+# the Deviance for the linear model is actually SSE. We see the value is once again confirmed
+linearRegression$deviance
+```
+
+# Part 2 - Linear Regression of sqrt() transform of y
+```{r}
+lmfitSqrt = lm(sqrt(y) ~ x, data = injury)
+summary(lmfitSqrt)
+```
+
+```{r}
+linearRegressionSqrtSSE = sum((injury$y - lmfitSqrt$fitted.values^2)^2)
+linearRegressionSqrtSSE
+```
+
+We see that the SSE for the sqrt() transformed y appears to be only slightly lower than the regular lm model. Furthermore, the variables are still reasonably significant. The plot below clearly shows that a linear fit is not the best idea. This is also supported by the low R^2 we get for both models.
+
+```{r}
+plot(injury$x, sqrt(injury$y) )
+```
+
+
+### Part 3 - Poisson Regression
+
+```{r}
+poissonRegression = glm(y ~ x  , data = injury, family = poisson)
+summary(poissonRegression)
+```
+
+```{r}
+poissonRegressionSSE = sum((poissonRegression$fitted.values - injury$y)^2)
+poissonRegressionSSE
+```
+
+This is the lowest SSE model and also the model we'd prefer.
+- The variables are much more significant
+- The overall model deviance passes the chi-squared significance test
+
+## Exercise 9.4
+
+```{r}
+# Import Data
+crash = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/crashdata2014-summary.csv")
+crash <- crash[-1] # Dropping the index
+str(crash)
+```
+
+### Part a) - Unweighted Poisson
+
+```{r}
+unweightedPoisson = glm(Count ~ Day + Time + TrafficControl + Road + Light + Weather, data = crash, family = poisson)
+summary(unweightedPoisson)
+```
+
+Comments on coefficients:
+- DayWeekend has negative coefficient, which makes sense - fewer people drive on weekend --> fewer crashes
+- TimeMidday is not signicicant --> no real difference b/w Midday & Evening, which makes sense , because the counts are almost the same (23,399 & 23,588)
+- Time Morning & Time Night - negative coefficients make sense, because there are fewer people driving in morning & night than in evening (which is the reference category)
+- NoTrafficControl - positive coefficient makes sense - peple are more likely to speed and therefore crash with no traffic control
+- RoadWet - negative coefficient doesn't make much sense - would expect poor road conditions to increase crashes
+- LightDawn/Dusk - negative coefficient compared to reference category Dark doesn't make much sense. This variable is very correlated with Time, which probably explains the coefficients i.e. signs are the same as Time Morning/Night
+- LightDaylight - same as above
+- WeatherPoor Visibility & Rain Snow - correlated with RoadWet and the Light variables.
+
+### Part b) - Weighted Poisson
+
+```{r}
+weightedPoisson = glm(Count ~ Day + Time + TrafficControl + Road + Light + Weather , data = crash, weights = Weight, family = poisson)
+summary(weightedPoisson)
+```
+
+We note the following:
+- The weightedPoisson has onemore significant variable (TimeMidday)
+- Has higher AIC
+- Has higher Residual Deviance
+
+Overall, the weightedPoisson doesn't change the size of the coefficients much, nore does it change their significance
+
+
+## Appendix
+
+```{r}
+unweightedSSE = sum((crash$Count - unweightedPoisson$fitted.values)^2)
+unweightedSSE
+```
+
+```{r}
+weightedSSE = sum((crash$Count - (weightedPoisson$fitted.values)*(crash$Weight))^2)
+weightedSSE
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

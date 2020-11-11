@@ -1,0 +1,328 @@
+---
+title: "ModellingAdaBoost2"
+author: "Kristiyan Dimitrov"
+date: "3/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# LIBRARIES
+```{r}
+library(fastAdaboost)
+library(caret) # For Cross Validation Hyperparameter tuning
+library(scales)
+library(tidyverse)
+library(dplyr)
+library(ModelMetrics)
+```
+
+# FUNCTIONS
+```{r}
+ CVInd <- function(n,K) { # n is sample size; K is number of parts; # returns K-length list of indices for each part
+      m<-floor(n/K) #approximate size of each part
+      r<-n-m*K
+      I<-sample(n,n) #random reordering of the indices
+      Ind<-list() #will be list of indices for all K parts
+      length(Ind)<-K
+      for (k in 1:K) {
+        if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+        else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+        Ind[[k]] <- I[kpart] #indices for kth part of data
+      }
+      Ind
+    }
+```
+
+# IMPORT DATA
+
+```{r}
+crash = read.csv("crash_clean31020.csv", stringsAsFactors = TRUE)
+crash = as_tibble(crash)
+#normalizing numeric variables/factorizing whatever wasn't
+crash$ROAD_DEFECT = as.factor(crash$ROAD_DEFECT)
+crash$CRASH_HOUR = as.factor(crash$CRASH_HOUR)
+crash$CRASH_DAY_OF_WEEK = as.factor(crash$CRASH_DAY_OF_WEEK)
+crash$CRASH_MONTH = as.factor(crash$CRASH_MONTH)
+crash$isHoliday = as.factor(crash$isHoliday)
+crash$isRush = as.factor(crash$isRush)
+crash$INJURIES_TOTAL_BINARY = as.factor(crash$INJURIES_TOTAL_BINARY)
+crash = crash %>%
+  select(-c("LATITUDE", "LONGITUDE", "NUM_UNITS", "PRIM_CONTRIBUTORY_CAUSE", "REPORT_TYPE",
+            "INJURIES_NO_INDICATION", "X", "FIRST_CRASH_TYPE")) %>% 
+              as.data.frame()
+colnames(crash)
+```
+
+# SUBSET DATA
+
+```{r}
+set.seed(1)
+crashSubset = crash[sample(nrow(crash), 100000),]
+```
+
+# DOWNSAMPLING
+
+```{r}
+crashDownSample = downSample(crash[,-ncol(crash)], crash[,ncol(crash)])
+colnames(crashDownSample)
+```
+
+# TRAINING BEST MODEL WITH nIter = 8
+
+```{r}
+bestAdaBoost = adaboost(Class~. , data = crashDownSample, nIter = 8)
+```
+
+# CHECKING VARIABLE IMPORTANCE
+
+```{r}
+nIterTune = c(8)
+adaBoostTune = expand.grid(nIterTune, 'Adaboost.M1')
+names(adaBoostTune) = c('nIter', 'method')
+# TRAIN OPTIONS
+bestAdaBoostControl = trainControl(method = 'none', verboseIter = T, sampling = 'down')
+# TRAIN MODEL
+bestAdaBoostTrain = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'adaboost',trControl = bestAdaBoostControl, scale = F, tuneGrid = adaBoostTune)
+
+
+```
+```{r}
+?varImp
+varImp(bestAdaBoostTrain)
+```
+
+
+
+# ADJUSTING PROBABILITIES AFTER DOWNSAMPLING
+
+```{r}
+# Probability of a 1 in the entire dataset to be used as default
+prob_default = sum(crash$INJURIES_TOTAL_BINARY == 1) / nrow(crash)
+# Odds of a 1 in the entire dataset to be used as default
+O_default = prob_default /(1-prob_default)
+
+O_s = 1 # Because we have 1:1 balanced data
+# FUNCTION TO CONVERT PROBABILITY FROM DOWNSAMPLING MODEL TO REGULAR PROBABILITY
+convertProbability = function(x, O = O_default) { # Give the function a probability (x) and the odds for 1 in the current dataset
+  return((x*O / (O_s-x*(O_s-O))))
+}
+
+# FUNCTION TO CALCULATE THE ODDS OF A 1 IN A GIVEN DATAFRAME WITH RESPONSE VARIABLE NAMED CLASS
+findO = function(x){
+  prob = sum(x$INJURIES_TOTAL_BINARY == 1) / nrow(x) # Find prob of 1 in data
+  odds = prob/(1-prob) # Find odds of 1 in data
+  return(odds)
+}
+```
+
+```{r}
+testPredictions = predict(bestAdaBoost, newdata = crash)
+testPredictions$prob[,2] # THese are the predicted probabilitis for the positive class
+convertedProbabilities = sapply(testPredictionsSampling$prob[,2] , convertProbability)
+```
+
+# USE A P* VALUE TO CONVERT PREDICTIONS TO BINARY RESPONSE
+
+```{r}
+convertBinary = function(x, p){ # Give the function a value x and a threshold probability you want to binarize against
+# The nice thing is that x can be a vector as well, so no need to use lapply when using this function
+  return(ifelse(x >= p, 1, 0))
+}
+```
+
+# CALCULATING FPR & FNR
+
+```{r}
+# CALCULATING FPR FROM ACTUAL & PREDICTED VALUES
+FPR = function(actual, predicted) { # FPR = FP / (FP + TN)
+  # FIND THE TRUE NEGATIVES TN
+  TN = 0
+  for (i in seq(1,length(actual),1)){
+    if((actual[i] == 0) & (predicted[i] == 0) ){
+      TN = TN + 1
+    }
+  }
+  # FIND THE FALSE POSITIVES FP
+  FP = 0
+  for (i in seq(1,length(actual),1)){
+    if((actual[i] == 0) & (predicted[i] == 1) ){
+      FP = FP + 1
+    }
+  }
+  # RETURN FPR = FP / (FP + TN)
+  return(FP/(FP+TN))
+}
+# ----------------------------------------------------------------------
+# CALCULATING FNR FROM ACTUAL & PREDICTED VALUES
+FNR = function(actual, predicted) { # FNR = FN / (FN + TP)
+  # FIND THE TRUE POSITIVES TP
+  TP = 0
+  for (i in seq(1,length(actual),1)){
+    if((actual[i] == 1) & (predicted[i] == 1) ){
+      TP = TP + 1
+    }
+  }
+  # FIND THE FALSE NEGATIVES FN
+  FN = 0
+  for (i in seq(1,length(actual),1)){
+    if((actual[i] == 1) & (predicted[i] == 0) ){
+      FN = FN + 1
+    }
+  }
+  # RETURN FNR = FN / (FN + TP)
+  return( FN / (FN + TP))
+}
+```
+
+# STEP 2 - TRY DIFFERENT P* VALUES
+
+```{r}
+test_pStar = function(pstars, numberOfFolds, trees = 8) { # Specify vector of p_stars to try and number of folds K
+  pStar = pstars # THESE ARE THE P-stars WE WANT TO EVALUATE
+  n = nrow(crash)
+  K = numberOfFolds # We are typically going to do 10-fold CV
+  results = data.frame(matrix(0, ncol = 5, nrow = K * length(pStar)))
+  names(results) = c('k-fold', 'p-star','FPR','FNR', 'AUC')
+  
+  for (j in seq(1:length(pStar))) {
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+      print(paste('Testing p_star =',pStar[j],'Fold number',k))
+      # TRAIN - VALIDATION SPLIT
+       train = crash[-Ind[[k]],] # Training data 
+       validation<-crash[Ind[[k]],]  # validation data # NOTE: I experimented and think it's fine if the response variable is in the validation set when making predictions for the validation
+       
+       # DOWNSAPLING TRAINING DATA
+       downSampleTrain = downSample(train[,-ncol(crash)], train[,ncol(crash)])
+       
+       # TRAIN MODEL ON DOWNSAMPLED DATA
+       model = adaboost(Class ~., data = downSampleTrain, nIter = trees)
+       
+       # MAKE PREDICTION ON VALIDATION DATA
+       predictions = predict(model, newdata = validation)
+       probabilities = predictions$prob[,2] # These are the predicted probabilitis for the positive class
+  
+       # CONVERT PROBABILITIES TO NORMAL DUE TO DOWNSAMPLING
+       odds = findO(train) # First need to get the odds of getting a 1 in the training data (the one that gets downsampled)
+       probabilitiesModified = convertProbability(x = probabilities, O = odds)
+       
+       # CONVERT MODIFIED PROBABILITIES TO PREDICTIONS BY USING P-star
+       predictionsBinary = convertBinary(x = probabilitiesModified, p = pStar[j])
+       
+       # CALCULATE FPR & FNR FOR THESE PREDICTIONS
+       calculatedFPR = FPR(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+       calculatedFNR = FNR(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+       calculatedAUC = auc(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+       
+       # RECORD RESULTS
+       results[k+(j-1)*K, 1] = k # folds column
+       results[k+(j-1)*K, 2] = pStar[j] # p_star column
+       results[k+(j-1)*K, 3] = calculatedFPR
+       results[k+(j-1)*K, 4] = calculatedFNR
+       results[k+(j-1)*K, 5] = calculatedAUC
+       
+    } #end of k loop
+  } #end of j loop
+  return(results)
+} # END OF FUNCTION
+```
+
+```{r}
+test_pStar(pstars = c(.1), numberOfFolds = 2 )
+```
+
+```{r}
+test_pStar(pstars = c(seq(.05,.15,.01)), numberOfFolds = 2 )
+```
+
+```{r}
+# Modified the function to take in trees argument, which is the nIter for adaboost fitting.
+tree50results = test_pStar(pstars = c(.08, .1, .12), numberOfFolds = 3, trees = 50)
+tree50results
+```
+
+```{r}
+tree50results2 = test_pStar(pstars = c(.12,.125,.13), numberOfFolds = 2, trees = 50)
+tree50results2
+```
+
+
+# Step 3 - Use best p* to evaluate final model on the specific 3 folds we test the other models on
+
+```{r}
+pStar = c(.12) # THESE ARE THE P-stars WE WANT TO EVALUATE
+n = nrow(crash)
+K = 3 # We are typically going to do 10-fold CV
+finalResults = data.frame(matrix(0, ncol = 5, nrow = K * length(pStar)))
+names(finalResults) = c('k-fold', 'p-star','FPR','FNR', 'AUC')
+set.seed(1) # THese should be the folds we all test our final model on
+for (j in c(1,2,3)){
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+    print(paste('Testing p_star =',pStar[j],'Fold number',k))
+    # TRAIN - VALIDATION SPLIT
+     train = crash[-Ind[[k]],] # Training data 
+     validation<-crash[Ind[[k]],]  # validation data # NOTE: I experimented and think it's fine if the response variable is in the validations et when making predictions for the validation
+     
+     # DOWNSAPLING TRAINING DATA
+     downSampleTrain = downSample(train[,-ncol(crash)], train[,ncol(crash)])
+     
+     # TRAIN MODEL ON DOWNSAMPLED DATA
+     model = adaboost(Class ~., data = downSampleTrain, nIter = 8)
+     
+     # MAKE PREDICTION ON VALIDATION DATA
+     predictions = predict(model, newdata = validation)
+     probabilities = predictions$prob[,2] # These are the predicted probabilitis for the positive class
+
+     # CONVERT PROBABILITIES TO NORMAL DUE TO DOWNSAMPLING
+     odds = findO(train) # First need to get the odds of getting a 1 in the training data (the one that gets downsampled)
+     probabilitiesModified = convertProbability(x = probabilities, O = odds)
+     
+     # CONVERT MODIFIED PROBABILITIES TO PREDICTIONS BY USING P-star
+     predictionsBinary = convertBinary(x = probabilitiesModified, p = pStar)
+     
+     # CALCULATE FPR & FNR FOR THESE PREDICTIONS
+     calculatedFPR = FPR(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+     calculatedFNR = FNR(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+     calculatedAUC = auc(validation$INJURIES_TOTAL_BINARY, predictionsBinary)
+     
+     # RECORD RESULTS
+     finalResults[k+(j-1)*K, 1] = k # folds column
+     finalResults[k+(j-1)*K, 2] = pStar[j] # p_star column
+     finalResults[k+(j-1)*K, 3] = calculatedFPR
+     finalResults[k+(j-1)*K, 4] = calculatedFNR
+     finalResults[k+(j-1)*K, 5] = calculatedAUC
+     
+  } #end of k loop
+}
+  
+finalResults
+```
+
+```{r}
+sum(finalResults$AUC)/9
+```
+
+Here’s what I did for AdaBoost:
+Step 1. Use caret to find the best number of trees with AUC as the metric of model evaluation (not in this .Rmd file)
+Step 2 - Find the p* cutoff probability, which gives us a FPR < 50%. Here are the steps I went through and the code is attached that might be helpful to you
+Step 2.1 - Separate into Train & Validation
+Step 2.2 - downSample the Train Data
+Step 2.3 - fit a model on the downsampled data
+Step 2.4 - make predictions with that model on the validation data
+Step 2.5 - Extract the probabilities from those predictions
+Step 2.6 - Convert the probabilities based on Apley’s formula in Notes1, page 24 (also from Ajit’s project)
+Step 2.7 - Convert the new probabilities to binary predictions based on a p* I pick at random (but am gradually changing to find the one that meets our criteria)
+Step 2.8 - Calculate FPR & FNR for these binary predictions, by comparing htem to the actual values in the validation data
+
+In the end, it turned out that the best p* is .12.
+
+Step 3 - I basically repeated the above CV process on the folds we agreed on (set.seed(1); Indices = CVInd(n, 3)). The final average FNR across the 3 folds is 41.6%
+
+
+
+
+

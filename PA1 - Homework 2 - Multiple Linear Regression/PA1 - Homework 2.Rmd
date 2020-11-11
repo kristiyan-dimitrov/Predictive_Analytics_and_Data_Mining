@@ -1,0 +1,101 @@
+---
+title: "PA1 - Homework 2"
+author: "Kristiyan Dimitrov"
+date: "10/7/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# library(ggplot2)
+library(dplyr)
+# library(lubridate)
+# library(scales)
+```
+
+## Exercise 3.12
+### Part (a)
+
+```{r}
+data=read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/Cobb-Douglas.csv",stringsAsFactors = FALSE)
+str(data)
+```
+```{r}
+#Calculating log of the three variables (capital, labor, and output)
+
+log_data <- data %>% 
+  mutate(log_output=log(data$output),log_capital=log(data$capital),log_labor=log(data$labor)) %>% 
+  .[5:7] #Keep only the last 3 columns with log data
+
+head(log_data)
+```
+
+```{r}
+# Now we fit a LS model through the data
+log_lm <- lm(log_output ~ log_capital + log_labor, data=log_data)
+summary(log_lm)
+
+```
+
+
+```{r}
+print(paste0("We see that the capital elasticity is: ", round(log_lm$coefficients[2],4)))
+print(paste0("We see that the labor elasticity is: ", round(log_lm$coefficients[3],4)))
+```
+
+### Part (b) - T-Test 
+
+```{r}
+# Calculating the Variance-Covariance matrix of the elasticities
+vcov_mat <- vcov(log_lm)
+var_capital_elas <- vcov_mat[2,2]
+var_labor_elas <- vcov_mat[3,3]
+covar_capital_labor_elas <- vcov_mat[2,3]
+print(paste("The variance of capital elasticity is",var_capital_elas))
+print(paste("The variance of capital elasticity is",var_labor_elas))
+print(paste("The covariance of capital & labor elasticities is",covar_capital_labor_elas))
+```
+### Part (c) - Extra SS & F-Test
+```{r}
+anova(log_lm)
+# This shows us that the SSE for the full model is 129.36
+```
+
+```{r}
+# Partial model
+# First we generate the data:
+
+new_data <- log_data %>% 
+  mutate(response=log_data$log_output-log_data$log_labor) %>% #New response = log(output) - log(labor)
+  mutate(input_one=log_data$log_capital-log_data$log_labor) %>%
+  .[3:5]
+
+head(new_data)
+full_model <- lm(data=new_data, response ~ input_one + log_labor)
+summary(full_model)
+anova(full_model) # We see that the SSE is still 129.36
+```
+
+```{r}
+drop1(full_model,test="F")
+# We see that for log_labor the RSS is 134.01
+```
+
+
+### <<<<< EXPERIMENTATION >>>>>
+
+```{r}
+# Let's try doubling all the data (this is ok, based on the assumption of H_O null hypothesis of constant return on sales)
+# Then we'll do a t.test() between the regular data and the log data
+double_log_data <- log_data %>% 
+  mutate(double_log_output=2*log_data$log_output, double_log_capital=2*log_data$log_capital,double_log_labor=2*log_data$log_labor) %>% 
+  .[4:6]
+
+head(double_log_data)
+head(log_data)
+
+t.test(log_data$log_output,double_log_data$double_log_output,paired=T)
+# The t statistic is -33.714, therefore we should reject  H_0
+```

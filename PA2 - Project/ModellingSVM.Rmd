@@ -1,0 +1,260 @@
+---
+title: "MSiA 420 - Project Template"
+author: "Kristian Nikolov, Laurie Merrell, Kristiyan Dimitrov, Jieda Li, Joshua Khazanov"
+date: "February 26, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+CV Indices Function
+```{r}
+CVInd <- function(n,K) { 
+  # n is sample size; K is number of parts; 
+  # returns K-length list of indices for each part
+  m<-floor(n/K) #approximate size of each part
+  r<-n-m*K
+  I<-sample(n,n) #random reordering of the indices
+  Ind<-list() #will be list of indices for all K parts
+  length(Ind)<-K
+  for (k in 1:K) {
+    if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+    else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+    Ind[[k]] <- I[kpart] #indices for kth part of data
+  }
+  Ind
+}
+```
+
+
+Initializing the data & Setting factors
+```{r}
+library(tidyverse)
+library(dplyr)
+#load data 
+crash = read.csv("crash_clean31020.csv", stringsAsFactors = TRUE)
+crash = as_tibble(crash)
+#normalizing numeric variables/factorizing whatever wasn't
+crash$ROAD_DEFECT = as.factor(crash$ROAD_DEFECT)
+crash$CRASH_HOUR = as.factor(crash$CRASH_HOUR)
+crash$CRASH_DAY_OF_WEEK = as.factor(crash$CRASH_DAY_OF_WEEK)
+crash$CRASH_MONTH = as.factor(crash$CRASH_MONTH)
+crash$isHoliday = as.factor(crash$isHoliday)
+crash$isRush = as.factor(crash$isRush)
+crash$INJURIES_TOTAL_BINARY = as.factor(crash$INJURIES_TOTAL_BINARY)
+crash = crash %>%
+  select(-c("LATITUDE", "LONGITUDE", "NUM_UNITS", "PRIM_CONTRIBUTORY_CAUSE", "REPORT_TYPE",
+            "INJURIES_NO_INDICATION", "X", "FIRST_CRASH_TYPE"))
+```
+
+```{r}
+str(crash)
+```
+
+```{r}
+head(crash)
+```
+
+Begin Modelling
+```{r}
+library(e1071) # Loading required library with SVM function
+library(caret) # For Cross Validation Hyperparameter tuning
+library(NMOF) # This package is required to use the gridSearch function, which will make tuning multiple hyperparameters much easier
+?svm
+```
+
+# SVM Tuning Parameters
+
+KERNELS: linear, polynomial, radial
+
+## Radial
+- gamma Range .1 - 2
+- cost
+
+```{r}
+crash = as.data.frame(crash[1:20000,])
+table(crash$INJURIES_TOTAL_BINARY)
+```
+```{r}
+?svm
+```
+
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .1, data=crash, cost = .2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+```{r}
+radialSVM2 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .2, data=crash, cost = .2, cross=5)
+radialSVM2$accuracies
+radialSVM2$tot.accuracy
+```
+
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .3, data=crash, cost = .2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .01, data=crash, cost = .2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = 5, data=crash, cost = .2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = 5, data=crash, cost = .5, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+
+## Polynomial
+- degree (polynomial specific) Range 2-5
+- gamma Range .1 - 2
+- coef0 (polynomial specific) Range .1 - 1
+
+```{r}
+costTune = c(seq(.01,.3,.1)) # 150 values for Cost
+scaleTune = 1
+degreeTune= c(2,3,4)
+
+polySVM_parameters1 = expand.grid(costTune, scaleTune, degreeTune) #, LossTune)
+names(polySVM_parameters1) <- c('C', 'scale', 'degree')
+polySVM_parameters1
+
+polySVM_options1 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction = defaultSummary, verboseIter = T)
+```
+
+
+```{r}
+crash = as.data.frame(crash[1:20000,])
+table(crash$INJURIES_TOTAL_BINARY)
+```
+
+```{r}
+polySVM_2 = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'svmPoly', trControl = polySVM_options1, tuneGrid = polySVM_parameters1, scale = F)
+```
+
+```{r}
+names(polySVM_2)
+polySVM_2$finalModel
+polySVM_2$modelInfo
+polySVM_2$results
+polySVM_2$bestTune
+polySVM_2$metric
+```
+
+
+## Linear
+- When using linear kernel, the only hyperparameter is cost ("cost of constraints violation (default: 1)—it is the ‘C’-constant of the regularization term in the Lagrange formulation.") Range: .01 - 5
+
+There appear to be a few options for tuning an SVM with a Linear kernel.
+
+### L2 Regularized Support Vector Machine (dual) with Linear Kernel
+ Tuning parameters:
+cost (Cost)
+Loss (Loss Function)
+
+```{r}
+costTune = c(seq(.01,.3,.01)) # 300 values for Cost
+# LossTune = c()
+# for (i in c(1:7)){ # There are 7 types of loss function for classification; Reference: https://cran.r-project.org/web/packages/LiblineaR/LiblineaR.pdf
+#   LossTune = c(LossTune, toString(i))
+# }
+# Creating Parameter Grid
+linearSVM_parameters1 = expand.grid(costTune) #, LossTune)
+names(linearSVM_parameters1) <- c('C') # ,'Loss')
+linearSVM_parameters1
+# Creating Tuning Options
+linearSVM_options1 = trainControl(method = 'repeatedcv', number = 5, repeats = 1, summaryFunction = defaultSummary, verboseIter = T)
+```
+
+```{r}
+crash = as.data.frame(crash[20000:40000,])
+linearSVM_2 = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'svmLinear', trControl = linearSVM_options1, tuneGrid = linearSVM_parameters1, scale = F)
+```
+
+
+#### Try subsetting data
+
+Tune model
+```{r}
+crash = crash[1:20000,]
+linearSVM_1 = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'svmLinear', trControl = linearSVM_options1, tuneGrid = linearSVM_parameters1, scale = F)
+```
+
+```{r}
+names(linearSVM_1)
+linearSVM_1$modelInfo
+linearSVM_1$modelType
+linearSVM_1$finalModel
+linearSVM_1$results
+linearSVM_1$resample
+linearSVM_1$bestTune
+linearSVM_1$metric
+```
+
+
+
+
+```{r}
+?svm
+```
+
+
+
+
+## Polynomial
+- degree (polynomial specific) Range 2-5
+- gamma Range .1 - 2
+- coef0 (polynomial specific) Range .1 - 1
+
+## Radial
+- gamma Range .1 - 2
+- cost
+
+
+
+
+
+
+```{r}
+svm(INJURIES_TOTAL_BINARY ~ . , data = crash, kernel = 'linear', cost = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# APPENDIX
+
+
+
+
+
+
+
+
+
+

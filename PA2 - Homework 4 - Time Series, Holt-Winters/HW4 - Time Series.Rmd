@@ -1,0 +1,319 @@
+---
+title: "HW4 - Time Series"
+author: "Kristiyan Dimitrov"
+date: "03/14/2020 - Happy Pi Day!"
+output: 
+  pdf_document: 
+    fig_caption: yes
+    highlight: tango
+    fig_width: 6
+    fig_height: 4.5
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment="  ")
+```
+
+```{r common}
+# define functions used globally which are not dependent on any question specifics
+# instead of reloading them each time
+# you can also use this space to load R packages
+# or custom scripts sourced from a R file
+# for example, I have included the CV_ind function
+
+library(readxl)
+
+CVInd <- function(n,K) { 
+  # n is sample size; K is number of parts; 
+  # returns K-length list of indices for each part
+  m<-floor(n/K) #approximate size of each part
+  r<-n-m*K
+  I<-sample(n,n) #random reordering of the indices
+  Ind<-list() #will be list of indices for all K parts
+  length(Ind)<-K
+  for (k in 1:K) {
+    if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+    else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+    Ind[[k]] <- I[kpart] #indices for kth part of data
+  }
+  Ind
+}
+```
+
+# Question 1
+Loading the data
+
+```{r q1_load_data}
+########### QUESTION 1 begins here ###################
+flights = read_excel('HW4_data.xls',col_names = F)
+flights = as.data.frame(flights)
+colnames(flights) = 'passengers'
+str(flights)
+```
+
+Let's convert to timeseries object and plot the data
+
+```{r}
+# flights = ts(flights, frequency = 12)
+flights = ts(flights) # deltat = 1/12
+plot(flights)
+```
+
+I observe that there is definitely an (upward) Trend. Furthermore, there is definite seasonality, which apparently is related to the trend.
+Therefore, a multiplicative model would probably be better: passengers = T x S x R (R is always there, because we assume there's always noise)
+
+## (a) - A moving average filter to smooth out the seasonality
+
+I'll try a few different values of m.
+```{r q1_a_model}
+m = 5
+n = length(flights)
+weights = rep(1/m, m)
+flightsMovingAverage = stats::filter(flights, filter = weights, method = 'convolution', sides = 1) # Specifying sides = 1, means I will take only past values.
+```
+
+```{r}
+plot(flights)
+smooth=c(flightsMovingAverage) # I did not include the NA in the vector (like it's done in the Notes code, because I just want to smooth over the graph, I will not be making forecasts yet);I did try to also include it and I understand the red graph shifts one observation to the right; I suppose that makes sense - we would make the prediction for y_(t+1)|t as L_t, where L_t is the average of the previous m values. Therefore, the first prediction we can make is for the m+1 time period. The NA accounts for that +1. The professor also mentions similar arguments for smoothing on slide 24 of Notes 4. In any case, for the purpose of identifying the trend, it doesn't matter. 
+lines(smooth, col='blue')
+```
+
+I don't think this m is high enough, because it's still reading in the seasonality.
+Let's repeat with m=12 (yearly)
+
+```{r}
+m = 12
+weights = rep(1/m, m)
+flightsMovingAverage = stats::filter(flights, filter = weights, method = 'convolution', sides = 2) 
+plot(flights)
+smooth=c(flightsMovingAverage) # I did not include the NA in teh vector (like it's done in the Notes code, because I just want to smooth over the graph, I will not be making forecasts yet); 
+lines(smooth, col='red')
+```
+
+This looks much more reasonable for the Trend (T) part of the graph. Note that I've also specified sides = 2, to do a centered moving average. Prof. Apley suggested that we use this option only for smoothing and never for predictions. In this case we are doing smoothing and I think it's a more appropriate option. It shifts the red line a bit to the left and so it fits the trend a bit better. Without this adjustment, the line is a bit to the right and looks like it's underestimating the trend. In fact, the professor says that 'you should always center the MA" for retrospective smoothing. Therefore, this is indeed the best option. He also says, on the same slide, "If smoothing out strong seasonality, use an MA with m exactly equal the period of seasonality". The seasonality is definitely annual, so m=12 is a good choice.
+
+What happens if I use m=15 for example?
+
+```{r}
+m = 15
+weights = rep(1/m, m)
+flightsMovingAverage = stats::filter(flights, filter = weights, method = 'convolution', sides = 1) # Specifying sides = 1, means I will
+plot(flights)
+smooth=c(flightsMovingAverage) # I did not include the NA in teh vector (like it's done in the Notes code, because I just want to smooth over the graph, I will not be making forecasts yet)
+lines(smooth, col='green')
+```
+
+Not good; Certain estimates are based on two seasonalities and so are once again creating new seasonalities (represented by the wavy line).
+
+## (b) - Calculating an Exponentially Weighted Moving Average (EWMA) for the next 2 yrs
+I specify k=24, because we want to make predictions for the next 2 yrs (24 months)
+
+```{r, fig.height=5,fig.width=9}
+### SURAJ'S EWMA FUNCTION WITH MULTIPLE ALPHA VALUES
+plot_ewma <- function(alpha,k=24){ # Specify k=24, because we want to make predictions for the next 2 yrs (24 months)
+  n <- length(flights)
+  # Use method ='convolutional' for MA
+  # Use method = 'recursive' for EWMA
+  EWMA <- filter(alpha*flights,filter=1-alpha,method='recursive',sides=1,init=flights[1]) # Since this is a recursive estimation, we need to give it an initial point from which to start calculating the levels; In this case we specify the first observation in the data.
+  yhat <- c(NA,EWMA,rep(EWMA[n],k-1)) # one-step ahead predictions and mean
+  plot(flights,type='b',xlim=c(0,n+k),main=paste('alpha =',alpha))
+  lines(yhat,col='red')
+}
+
+par(mfrow=c(2,3))
+for(alpha in c(1,0.5,0.1,0.05, 0.01)){
+  plot_ewma(alpha)
+}
+```
+
+I think an alpha somewhere between 0.1 and 0.05 fits the data most reasonably. Specifically looking at the 0.1 graph, I think that the 24-step-ahead prediction will dramatically understimate the peaks in the data during high seasonality. More importantly, it completely ignores any sort of trend or seasonality when making a prediction; that's why the professor says in his notes that MA & EWMA are not used when there is seasonality or a trend; Better to use them just for smoothing out R & S (leaving T & C) or when making predictions, which require only R (noise) and C (cyclical)
+
+Below I've calculated the weight that EWMA will give to each of the last 24 observations when calculating the level (with alpha = 0.1)
+```{r}
+weights = c()
+for (j in seq(0,23,1)) {
+  weights = c(weights, .1*((.9)^j))
+}; weights
+```
+## c) Calculate & Plot the Holt method forecasts for the next 2 years; what are the optimal alpha & beta?
+
+```{r}
+# estimating optimal alpha & beta hrough Holt method, which does CV and compares based on MSD (MSE)
+Holtflights <- HoltWinters(
+  flights,
+  alpha = NULL, # specify NULL (default) for estimation or specify a fixed value
+  beta = NULL, # trend parameter; set FALSE to ignore trends; I will set it to NULL, because I want it estimated
+  gamma = FALSE, # seasonality parameter; set FALSE to ingore seasonalities
+  seasonal = 'additive' # additive or multiplicative model (Only takes effect if gamma is non-zero).
+)
+Holtflights
+```
+The estimated best alpha is 1. I think this means that we wouldn't be doing EWMA and just MA, because all weights for observations other than the 'current' one will be 0. The optimal beta is = .0032. I shouldn't confuse it with the b coefficient (=4.597), which is the slope of the prediction based on the trend. In short, the smoothing parameters are used to calculate the coefficients.
+Now I will make predictions for the next 24 months and plot the estimates
+
+```{r}
+Holtpred <- predict(Holtflights,n.ahead=20,prediction.interval = TRUE,level=0.95)
+plot(Holtflights,Holtpred,type='b')
+```
+
+The upside of this new prediction is that it takes into consideration the trend (that's why we included the beta parameter to be estimated)
+
+The downside is that by specifying gamma = FALSE, we are still ignoring the seasonality; Therefore, just like our EWMA estimate we will be doing a poor job of predicting those seasonalities.
+
+## d) = Using HoltWinters for an additive model with seasonality & trend included
+
+```{r}
+flights = ts(flights, frequency = 12); flights # I had to specify freq = 12, because otherwise I was getting this error: "Error in decompose(ts(x[1L:wind], start = start(x), frequency = f), seasonal) : time series has no or less than 2 periods"
+# estimating optimal alpha & beta hrough Holt method, which does CV and compares based on MSD (MSE)
+HoltAdd <- HoltWinters(
+  flights,
+  alpha = NULL, # specify NULL (default) for estimation or specify a fixed value
+  beta = NULL, # trend parameter; set FALSE to ignore trends; I will set it to NULL, because I want it estimated
+  gamma = NULL, # seasonality parameter; set FALSE to ingore seasonalities
+  seasonal = 'additive' # additive or multiplicative model (Only takes effect if gamma is non-zero).
+)
+HoltAdd
+```
+
+The optimal smoothing parameters are alpha = .248, beta = .0345, gamma = 1. The fact that gamma = 1 means we consider only the latest seasonality value is taken into consideration when calculating a prediction.
+Now I make predictions and plot them.
+
+```{r}
+k = 24
+Holtpred<-predict(HoltAdd, n.ahead=k, prediction.interval = T, level = 0.95)
+plot(HoltAdd,Holtpred,type="b")
+```
+
+Let's look at the seasonality effects month by month. As expected, there are many more passengers during the summer (June-August, s6-s8)
+
+```{r}
+barplot(HoltAdd$coefficients[-c(1,2)])
+```
+
+## e) Multiplicative Model
+
+```{r}
+HoltMult <- HoltWinters(
+  flights,
+  alpha = NULL, # specify NULL (default) for estimation or specify a fixed value
+  beta = NULL, # trend parameter; set FALSE to ignore trends; I will set it to NULL, because I want it estimated
+  gamma = NULL, # seasonality parameter; set FALSE to ingore seasonalities
+  seasonal = 'multiplicative' # additive or multiplicative model (Only takes effect if gamma is non-zero).
+)
+HoltMult
+```
+
+The best parameters are alpha = .0275; beta = .0327; gamma = .8707
+
+```{r}
+Holtpred<-predict(HoltMult, n.ahead=k, prediction.interval = T, level = 0.95)
+plot(HoltMult,Holtpred,type="b")
+```
+
+The seasonalities can be interpreted in the same way (s_i < 1, means lower than average seasonality i.e. 'negative' seasonality)
+i.e. months 6-8 are high seasonality, months 2 & 11 (feb & nov) are lowest.
+
+```{r}
+barplot(HoltMult$coefficients[-c(1,2)])
+abline(a=1, b=0)
+```
+
+## f) Which method produces better forecasts?
+As I mentioned at the very beginning, a multiplicative model is more appropriate for predictions, because it appears that the trend influences the amplitude of the seasonality i.e. higher trend value -> larger seasonality spike.
+
+We can confirm this numerically by looking at the SSE of the multiplicative & additive models:
+
+```{r}
+HoltMult$SSE
+HoltAdd$SSE
+```
+
+We see that the Multiplicative one has a much lower SSE, which means it fits the data better.
+The documentation describes this SSE as: "The final sum of squared errors achieved in optimizing"
+
+# Question 2
+
+```{r q2_data}
+########### QUESTION 2 begins here ################### 
+# Improt data
+flights = read_excel('HW4_data.xls',col_names = F)
+flights = as.data.frame(flights)
+colnames(flights) = 'passengers'
+str(flights)
+```
+
+```{r}
+flights = ts(flights, deltat = 1/12)
+```
+
+## a) Additive Decomposition model
+
+```{r}
+decomposeFlightsAdd = decompose(flights, type = 'additive')
+plot(decomposeFlightsAdd,type='b')
+```
+
+Below we see the trend indices. It is expected behavior that the first 6 and last 6 are NAs, because by default the decompose function uses a centered MA approach to extract the trend. The number is 6, because that is half the frequency of the data (which is 12 i.e. monthly data with annual seasonality)
+
+```{r}
+decomposeFlightsAdd$trend
+```
+
+Here are the seasonality indices; they look pretty similar to the ones from the HoltWinters model.
+
+```{r}
+barplot(decomposeFlightsAdd$figure)
+```
+
+Now I will construct a plot of the original time series and the fitted values.
+
+```{r}
+predictionsAdd = decomposeFlightsAdd$trend + decomposeFlightsAdd$seasonal
+plot(flights,type="b")
+lines(predictionsAdd, col='red')
+```
+
+As in question 1, it is apparent that the predicted values overestimate the spikes in the beginning of the data and underestimate them in the end. Again, I suspect a multiplicative model will address this issue well.
+
+## b) Multiplicative Decomposition model
+
+```{r}
+decomposeFlightsMult = decompose(flights, type = 'multiplicative')
+plot(decomposeFlightsMult,type='b')
+```
+
+Here are the seasonality indices
+
+```{r}
+barplot(decomposeFlightsMult$figure)
+abline(a=1,b=0)
+```
+
+Here is the fitted and observed data on the same plot
+
+```{r}
+predictionsMult = decomposeFlightsMult$trend * decomposeFlightsMult$seasonal
+plot(flights,type="b")
+lines(predictionsMult, col='red')
+```
+
+I think the multiplicative model, once again represents the data better.
+
+If we look at the random part of the additive decomposition, we see there are negative spikes in the beginning and positive spikes towards the end of the data. In other words, we are interpreting the lower than average seasonal spikes in the beginning of the data AS WELL AS the higher than average spikes towards the end of the data as noise. 
+
+In fact, they are not noise, but a sign that the amplitude of the seasonality is dependent on the trend and therefore a multiplicative model is more suitable to decompose this time series.
+
+This is even more apparent when we look at the fitted & observed values on the same plot. The seasonality is definitely better captured by the multiplicative model.
+
+# Appendix
+
+This section is to be used for including your R code. The following lines of code will take care of it. Please make sure to comment your code appropriately - in particular, demarcating codes belonging to different questions. Among other things, it will be easier for you to debug your own code.
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
+
+

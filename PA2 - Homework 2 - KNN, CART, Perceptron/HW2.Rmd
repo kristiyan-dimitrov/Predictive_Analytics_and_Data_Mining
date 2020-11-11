@@ -1,0 +1,728 @@
+---
+title: "Assignment template"
+author: "Name"
+date: "Date"
+output: 
+  pdf_document: 
+    fig_caption: yes
+    highlight: tango
+    fig_width: 6
+    fig_height: 4.5
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment="  ")
+```
+
+    ```{r common,include=FALSE, echo=FALSE}
+    library(car)
+    library(readxl)
+    library(tidyverse)
+    library(psycho)
+    library(caret)
+    library(nlme)
+    library(DescTools)
+    library(nnet)
+    library(RSNNS)
+    library(rpart)
+    library(ModelMetrics)
+    library(rpart)
+    # install.packages('ALEPlot')
+    library(ALEPlot)
+    
+    set.seed(42)
+    
+    CVInd <- function(n,K) { # n is sample size; K is number of parts; # returns K-length list of indices for each part
+      m<-floor(n/K) #approximate size of each part
+      r<-n-m*K
+      I<-sample(n,n) #random reordering of the indices
+      Ind<-list() #will be list of indices for all K parts
+      length(Ind)<-K
+      for (k in 1:K) {
+        if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+        else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+        Ind[[k]] <- I[kpart] #indices for kth part of data
+      }
+      Ind
+    }
+
+    # FUNCTION FOR DOING 10-FOLD CV WITH 10 DIFFERENT FOLD SETS
+    # RETURNS AVG MISCLASSIFICATION RATE FOR 3 MODELS
+tenFoldCVtenRepThreeModels = function(linout, size, decay) {
+  Nrep<-10 #number of replicates of CV
+  K<-10  #K-fold CV on each replicate
+  n.models = 3 #number of different models to fit
+  n=nrow(fgl.standardized)
+  y<-fgl.standardized[['type']]
+  yhat=matrix(0,n,n.models)
+  CV.rate<-matrix(0,Nrep,n.models)
+  for (j in 1:Nrep) {
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+      # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+      out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[1], skip=F, size=size[1], decay=decay[1], maxit=1000, trace=F)
+      # Make predictions with our model on the Validation Data set
+      for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+        phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+        typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+        yhat[i,1] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+      }
+  
+      # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+      out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[2], skip=F, size=size[2], decay=decay[2], maxit=1000, trace=F)
+      # Make predictions with our model on the Validation Data set
+      for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+        phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+        typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+        yhat[i,2] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+      }
+      
+      # Train model on training data; MODIFY TEST PARAMETERS ON LINE BELOW
+      out<- nnet(type ~ ., fgl.standardized[-Ind[[k]],], linout=linout[3], skip=F, size=size[3], decay=decay[3], maxit=1000, trace=F)
+      # Make predictions with our model on the Validation Data set
+      for (i in Ind[[k]]){ # For each index from those chosen to be in the validation set
+        phat = predict(out, fgl.standardized[i,c(1:9)]) # Predict the response value from our model based on the predictor values at that index
+        typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+        yhat[i,3] = typePrediction # Populate the specific row in yhat at the index for which we are making a prediction
+      }
+       
+    } #end of k loop
+    CV.rate[j,]=apply(yhat,2,function(x) sum(y != x)/n)
+  } #end of j loop
+  # CV.rate
+  CV.rateAve<- apply(CV.rate,2,mean); CV.rateAve #averaged CV misclass rate
+  return(list(CV.rate, CV.rateAve))
+  }
+    
+    ```
+
+# Problem 1
+
+Reading in data
+```{r q1_load_data}
+########### QUESTION 1 begins here ###################
+heart = read_excel('HW2_data.xls') # loading data for question 1
+head(heart)
+```
+
+log10 transforming the response variable and plotting a histogram of the result.
+
+```{r, fig.height=3}
+y = heart[['cost']]
+heart['log10_cost'] = log10(heart[['cost']])
+hist(log10(heart[['cost']]), breaks = 50) # Plotting data
+```
+
+## (a) - Fitting a linear model
+
+```{r}
+heart.fit1.data =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+# head(heart.fit1.data) # Looking at the new data
+fit1 = lm(log10_cost ~ . , data = heart.fit1.data) # Fitting linear model
+summary(fit1)
+```
+
+We see that there are some variable above, which are not significant. 
+Under normal circumstances, it makes sense to run the lm fit without them.  
+In this case, however, I will keep them.
+
+I calculate the Variance Inflation Factors as a check for multicollinearity.
+There doesn't appear to be a VIF>10, so don't suspect multicollinearity.
+```{r}
+vif(fit1)
+```
+
+Calculating Correlation Matrix for the predictors as a further check on multicollinearity
+```{r}
+cor(heart.fit1.data[,1:8]) 
+```
+
+Visualizing the correlation matrix so this is easier to read
+
+```{r, fig.height=4}
+PlotCorr(cor(heart.fit1.data ))
+```
+
+Checking for any correlation > .6
+There doesn't appear to be any multicollinearity between our predictor variables
+```{r}
+cor(heart.fit1.data[,1:8]) > .6
+```
+
+I'll make a few plots to check other diagnostics on our model.  
+The below two graphs show us that our normality and homoscedasticity assumptions are somewhat satisfied   
+
+```{r, fig.height=3}
+plot(fit1, which = c(1,2))
+```
+
+The two plots below show us that there are 3 observations (45, 79, and 183 which are outliers & infuential for our model. Might be a good idea to look at those more closely)
+
+```{r, fig.height=3}
+plot(fit1, which = c(4,6))
+```
+
+Diagnostics on our model are promising. However, the adjusted R-squared is 0.5789, which means there is a lot of variability in the data that our model is not capturing.
+
+Let's try cross validation as a measure of the predictive power of our model.
+First I've standardized my data.
+Then I use the train() function in the caret package to run 10-fold cross, which I initialize 50 times.
+Note that I've set the intercept argument to FALSE, because we are working with standardized data.
+
+```{r}
+detach('package:RSNNS', unload = T)
+set.seed(42)
+heart.fit1.standardizedData = standardize(heart.fit1.data)
+options = trainControl(method = 'repeatedcv', number = 10, repeats = 50, summaryFunction = defaultSummary) 
+fit1.cv = train(log10_cost ~ ., method = 'lm', data = heart.fit1.standardizedData, trControl = options, tuneGrid  = expand.grid(intercept = FALSE))
+fit1.cv
+```
+
+The R-squared from CV for the linear model is 0.5849761 
+And this is the final model which produced the lowest RMSE / highest Rsquared
+
+```{r}
+summary(fit1.cv)
+```
+
+## b)
+Examining the above output, I see that:
+- number of interventions (intvn) has the highest standardized & significant coefficient.  
+Therefore, it is the variable with the most influence on the cost of the patient.  
+- After that, with a much lower coefficient, are # of chronic comorbid conditions (comorb) and duration of treatment (dur).  
+- Finally, the number of complications (comp) appears to have weight on the cost as well.  
+- Number of ER visits is somewhat significant, but it's coefficient is rather small.  
+
+## c) - Diagnostics
+
+The notes I made about the original model pretty much apply in the same way to our cross-validated model
+Heteroscedasticity appears to be an issue based on the residuals vs fitted values plot.
+The q-q plot shows that normality is not a good assumptions.
+
+```{r, fig.height=3}
+log10_cost.predictions = predict.train(fit1.cv)
+residuals = -log10_cost.predictions + heart.fit1.standardizedData$log10_cost
+plot(log10_cost.predictions, residuals)
+abline(0,0)
+```
+
+```{r, fig.height=3}
+qqnorm(log10_cost.predictions)
+abline(0,1)
+```
+
+Most importantly, the adjusted R-squared never exceeds 60%.
+This probably means that our linear model does not correctly represent the real relationship between the variables.
+Let's try a Neural Net in the next Problem!
+
+# Problem 2
+
+First, I set up tuning parameters for decay and size of hidden layer.
+I'm looking at combinations of size = 1-10 and decay = 0 - 5 (in increments of .5)
+In this way I will have to fit approximately 100 neural nets.
+
+```{r}
+########### Problem 2 begins here ################### 
+tune.decay = seq(0,5,.5)
+tune.size = seq(1, 10)
+nn1.tuningParameters = expand.grid(tune.decay, tune.size)
+nn1.tuningParameters = data.frame(nn1.tuningParameters)
+names(nn1.tuningParameters) = c('decay','size')
+head(nn1.tuningParameters)
+```
+
+
+It turns out the best parameter is decay = 0 and size = 5.
+
+```{r}
+# detach('package:RSNNS', unload = T)
+options = trainControl(method = 'repeatedcv', number = 10, repeats = 1, summaryFunction = defaultSummary) # , verboseIter = T
+nn1.cv = train(log10_cost ~ ., method = 'mlpWeightDecay', data = heart.fit1.standardizedData, trControl = options, tuneGrid  = nn1.tuningParameters)
+nn1.cv
+```
+
+I will rerun with sizes 3-7 and decay 0-1 in .1 increments.
+Overall, this fits another 50 neural nets.
+It turns out that decay = 0 and size = 6 are best.
+
+```{r}
+tune.decay = seq(0,1,.1)
+tune.size = seq(3, 7)
+nn2.tuningParameters = expand.grid(tune.decay, tune.size)
+nn2.tuningParameters = data.frame(nn2.tuningParameters)
+names(nn2.tuningParameters) = c('decay','size')
+# head(nn1.tuningParameters)
+options = trainControl(method = 'repeatedcv', number = 10, repeats = 1, summaryFunction = defaultSummary) # , verboseIter = T)
+nn2.cv = train(log10_cost ~ ., method = 'mlpWeightDecay', data = heart.fit1.standardizedData, trControl = options, tuneGrid  = nn2.tuningParameters)
+nn2.cv
+```
+
+I will limit decay to >0, between .01 and .5 in .01 increments.
+I'll test size 5 and 6.
+Overall, this fits another 100 neural nets.
+The best combination turns out to be size = 6 and decay = .01
+
+```{r}
+tune.decay = seq(.01,.5,.01)
+tune.size = seq(5, 6)
+nn3.tuningParameters = expand.grid(tune.decay, tune.size)
+nn3.tuningParameters = data.frame(nn3.tuningParameters)
+names(nn3.tuningParameters) = c('decay','size')
+# head(nn1.tuningParameters)
+options = trainControl(method = 'repeatedcv', number = 10, repeats = 1, summaryFunction = defaultSummary) # , verboseIter = T
+nn3.cv = train(log10_cost ~ ., method = 'mlpWeightDecay', data = heart.fit1.standardizedData, trControl = options, tuneGrid  = nn3.tuningParameters)
+nn3.cv
+```
+
+The best Rsquared = 0.5730521 
+Note that this is with Shrinkage parameter = .01. I forced it to be >0. If we were to leave it =0, then the best Rsquared would be ~.68 (as seen from the output of the previous to exploratorations with different gridParameters)
+Now I will fit the final model.
+
+```{r}
+nn = nnet(log10_cost ~. ,data = heart.fit1.standardizedData, linout = TRUE, decay = .01, size = 6, skip = FALSE, maxit = 1000, trace = F)
+summary(nn)
+```
+
+This is the SSE for our Neural Network
+```{r}
+# sum(residuals(nn)^2) # Second way of calculating SSE!
+sum(nn$residuals^2) # SSE For Neural Network
+```
+
+This is the SSE from Cross-Validation for our Linear model.
+```{r}
+sum((predict.train(fit1.cv)-heart.fit1.standardizedData$log10_cost)^2)
+sum(residuals(fit1.cv)^2)
+```
+Below I have calculated the SSE just from the training data. If we were to naively look at only that, we might assume that there isn't much of a difference between the linear model and the neural network. But the fact that the SSE-CV is so much higher, clearly shows us that our linear model is somewhat overfitting the data.
+```{r}
+sum(fit1$residuals^2)
+```
+
+In any case, the Neural Net clearly shows a lower SSE than the linear model.
+However, the best R-squared from CV was 0.5730521.
+For the Linear model it was 0.5849761. This is probably due to the minor shrinkage I added for the neural net.
+Overall, I wouldn't expect the neural net to produce much better results on new data as opposed to the linear model.
+
+
+## c) - Looking at ALE plots
+The Main effect ALE plots below show us that there are still some non-linearities that our model has not captured.
+More specifically in x3, x6, x7, x8 (intvn, comp, comorb, dur).
+Interestingly enough, these are precisely the variables, which we saw were significant for the linear model.
+
+```{r}
+heart.fit1.scaledData = scale(heart.fit1.data) # Tried using scale() function instead of standardize
+# The output is a matrix instead of a tibble/dataframe. This resolved an error I was getting when 
+# using the standardized data (instead of the scaled)
+yhat <- function(X.model, newdata) as.numeric(predict(X.model, newdata))
+par(mfrow=c(2,4))
+for (j in 1:8)  {ALEPlot(heart.fit1.scaledData[,1:8], nn, pred.fun=yhat, J=j, K=50, NA.plot = TRUE)
+  rug(heart.fit1.scaledData[,j]) }  ## This creates main effect ALE plots for all 8 predictors
+par(mfrow=c(1,1))
+```
+
+Looking at the Main Effect ALE Plots (more specifically the scales on the y axis) I observe that:
+- 1) Age appears to be linear and decreasing, but the scale of the output is fairly small, so I don't expect much influence there.
+- 2) Gender (which is binary 0/1) appears to have very little influence on the output (the y axis has very low values)
+- 3) The number of interventions appears to have a much larger impact on the log10_cost. And it is also in the direction we would expect: more interventions, leads to higher cost.
+- 4) # of Drugs doesn't appear to have much influence, and whatever influence it has seems a bit counterintuitive - more drugs lower cost.
+In any case, the Linear model did suggest that drugs is not a signicant variable.
+- 5) # of ER visits has a small scale on the y axis and just like the linear model, doesn't suggest much impact on the cost
+- 6) is number of complications. Only one patient has 3, 42 have 1, and the rest have 0. Therefore, the graph is not particularly useful, but we do see that patients with 1 or 3 complications have a slightly higher cost than those who don't.
+- 7) # of comorbid conditions appears to have a significant increasing influence on the cost, similar as the one suggested by the Linear Model
+- 8) The duration has an odd ALE plot. In any case, the scale is fairly small which is quite different from what our linear model suggested.
+
+### d) Residual Plots
+
+```{r}
+plot(nn$fitted.values, nn$residuals)
+```
+
+I think our model doesn't perform particularly well for some of the outliers and therefore there might be still some non-linearity not captured by it.
+That's why it's a good idea to try fitting a regression tree!
+
+# Problem 3
+# NOTE FROM THE FUTURE: I don' tthink I needed to go through all the CV I do below; the plotcp() function does it for me :O
+With Regression Trees, I don't have to standardize the data, so I will work with the original dataset.
+```{r}
+########### Problem 3 begins here ################### 
+head(heart.fit1.data)
+```
+
+### a) - Using 10-fold CV to find best tree size and complexity parameter
+
+First I define a range of values for the GridSearch
+I will iterate from 1 to 30 for maxdepth and between .01 and 1 in increments of .01 for cp
+Overall, this means 3000 Decision Trees.
+
+```{r}
+maxdepthRange = seq(1, 30, 1)
+cpRange = seq(.01, 1, .01)
+grid = expand.grid(maxdepthRange, cpRange)
+names(grid) = c('maxdepth', 'cp')
+head(grid)
+```
+
+
+Now I fit 3000 models with 10-fold cross-validation, which will mean 30,000 regression trees.
+
+```{r}
+set.seed(42)
+n = nrow(heart.fit1.data)
+K = 10
+# Number of potential models in the grid
+num_models <- nrow(grid)
+# Create the CV Indices
+indices = CVInd(n, K) # We'll be using the same folds for all models so this has to be computed only once!
+avgRMSE = c()
+
+for (j in 1:num_models){
+  
+  cp = grid$cp[j]
+  maxdepth = grid$maxdepth[j]
+  rmse = c()
+  
+  for (i in 1:K){
+    # SET TRAINING INDICES
+    trainingIndices = indices[[i]]
+    trainingData = heart.fit1.data[-trainingIndices,]
+    validationData = heart.fit1.data[trainingIndices,]
+    
+    # Train a model and store in the list
+    model = rpart(formula = log10_cost ~ ., data = trainingData, method = "anova",cp = cp, maxdepth = maxdepth)
+    
+    # Make a prediction on the validation set
+    pred = predict(object = model, newdata = validationData)
+    
+    # Compute rmse for this fold and add to vector
+    rmse[i] = rmse(actual = validationData$log10_cost, predicted = pred)
+    
+  }
+  
+  avgRMSE = c(avgRMSE, mean(rmse))
+
+}
+```
+
+Here are some of the avgRMSE I got. 
+
+```{r}
+head(unique(avgRMSE), 4)
+```
+
+In turns out that the minimum CV-RMSE is achieved with cp = .01 and maxdepth anywhere between 4 and 30.
+I will try with a lower cp range and fit another 30,000 Decision Trees.
+
+```{r}
+cpRange = seq(.001, .01, .001)
+grid = expand.grid(maxdepthRange, cpRange)
+names(grid) = c('maxdepth', 'cp')
+set.seed(42)
+n = nrow(heart.fit1.data)
+K = 10
+# Number of potential models in the grid
+num_models <- nrow(grid)
+# Create the CV Indices
+indices = CVInd(n, K) # We'll be using the same folds for all models so this has to be computed only once!
+avgRMSE = c()
+
+for (j in 1:num_models){
+  
+  cp = grid$cp[j]
+  maxdepth = grid$maxdepth[j]
+  rmse = c()
+  
+  for (i in 1:K){
+    # SET TRAINING INDICES
+    trainingIndices = indices[[i]]
+    trainingData = heart.fit1.data[-trainingIndices,]
+    validationData = heart.fit1.data[trainingIndices,]
+    
+    # Train a model and store in the list
+    model = rpart(formula = log10_cost ~ ., data = trainingData, method = "anova",cp = cp, maxdepth = maxdepth)
+    
+    # Make a prediction on the validation set
+    pred = predict(object = model, newdata = validationData)
+    
+    # Compute rmse for this fold and add to vector
+    rmse[i] = rmse(actual = validationData$log10_cost, predicted = pred)
+    
+  }
+  
+  avgRMSE = c(avgRMSE, mean(rmse))
+}
+```
+
+These turns out to be the best parameters for our Decision Tree!
+```{r}
+grid[which.min(avgRMSE),]
+```
+
+### b) Now I fit the final model
+
+The plotcp() & printcp() outputs confirm that the best value is with cp = 0.0066471 and nsplit = 7
+
+```{r}
+bestTree = rpart(log10_cost ~. , data = heart.fit1.data, method = 'anova', cp = .002, maxdepth = 7 )
+plotcp(bestTree)
+printcp(bestTree)
+```
+
+Now I prune the tree and get this final tree model:
+```{r}
+bestPrunedTree = prune(bestTree, cp = 0.0066471 )
+bestPrunedTree
+```
+
+Now I plot the tree both uniformly and non-uniformly.
+Note that the root node split is on interventions.
+
+```{r, fig.height=3}
+par(cex=.8); plot(bestPrunedTree, uniform = T); text(bestPrunedTree, use.n = T); 
+```
+
+```{r, fig.height=3}
+par(cex=.8);plot(bestPrunedTree, uniform = F); text(bestPrunedTree, use.n = T); 
+```
+
+Finally, I will evaluate the tree's predictive power with SSE, the same way as with the Linear model and the Neural Network
+
+```{r}
+yhat = predict(bestPrunedTree); e = heart.fit1.data$log10_cost - yhat
+sum(e^2)
+```
+
+The Regression Tree definitely appears to be doing better than the Linear model & the NN.
+
+### c) - Variable Importance
+Just like the Linear Model & NN, it gives the most importance to number of interventions, duration, and # of comorbid conditions.
+
+```{r}
+bestPrunedTree$variable.importance
+```
+
+### d) - Residuals plot
+
+```{r}
+plot(yhat, e)
+```
+
+### e)
+In the end, it appears that after extensive Cross-Validation, the Regression Tree achieved lowest CV-SSE.
+Furthermore, it took a lot less time to train (I trained ~ 2,500 Neural Nets and that took much longer than ~60,000 Trees)
+The residual plot also suggests that the model is better capable of capturing the variability in the data.
+So, I would recommend the tree model (especially because it's the most interpretable as well).
+
+# Problem 4
+
+Importing Data
+
+```{r}
+library(MASS)
+########### Problem 4 begins here ################### 
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+str(fgl)
+```
+
+### a) - Fitting a Neural Net
+
+I need to create a STANDARDIZED VERSION of the data
+
+```{r}
+### I'll also need to create a STANDARDIZED VERSION of the data
+fgl.standardized = standardize(fgl)
+fgl.standardized = as.data.frame(fgl.standardized) # Converting to DataFrame
+fgl.standardized[['type']] = as.factor(fgl.standardized[['type']])
+types = levels(fgl.standardized[['type']]) # Extracting the levels of the response variable. These will be needed for making predictions
+str(fgl.standardized)
+```
+
+
+Now, I will do 10-fold Cross Validation, with 10 different randomized splits of the data i.e. Nrep = 10
+I will be comparing 3 models at a time. More specifically, 3 different Neural Networks with different hyperparameters
+First, I try:
+linout = F, size = 10, decay = .01
+linout = F, size = 10, decay = .05
+linout = F, size = 10, decay = .1
+
+```{r}
+linout = c(F,F,F)
+size = c(10,10,10)
+decay = c(.01,.05,.1)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+decay = .05 gives the lowest CV-Misclassification Rate.
+Now I will try with values closer to .05. 
+After several repetitions, which I will not display here for brevity, I find that the optimal decay is .04
+I observe that on subsequent iterations the same inputs would lead to a different conclusion.
+Therefore, I'm in the realm of uncertainty.
+
+```{r}
+linout = c(F,F,F)
+size = c(10,10,10)
+decay = c(.035,.037,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+What about the size of the hidden layer?
+I will try different values: (7,10,12), (5,12,15), (8,15,20), (12,20,30), (30,40,50), (25,30,35), (25,27,33), (23,25,26)
+The values above are my progression in hunting down the best value. It turns out the best value is: 25
+
+```{r}
+linout = c(F,F,F)
+size = c(23,25,26)
+decay = c(.04,.04,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+Finally, I will check if a linear output or logistic is better
+
+```{r}
+linout = c(F,T,T)
+size = c(25,25,25)
+decay = c(.04,.04,.04)
+tenFoldCVtenRepThreeModels(linout,size,decay)
+```
+
+Linear Output actually gives slightly better results!
+
+To summarize, the best NN is with decay = .04, size = 25, linout = T.
+I'll fit this best NN and make predictions with it on the training data
+
+```{r}
+y = fgl.standardized$type
+bestNN = nnet(type ~ ., fgl.standardized, linout=T, skip=F, size=25, decay=.04, maxit=1000, trace=F)
+phat = predict(bestNN, fgl.standardized[,c(1:9)])
+yhat = c()
+for (i in 1:length(phat[,1])){
+   typePrediction = types[which.max(phat[i,])]
+   yhat = c(yhat, typePrediction)
+}
+
+1-sum(yhat==y)/length(y)
+```
+
+```{r}
+table(yhat, y)
+```
+
+The NN appears to be doing very well on the training data, but this shouldn't fool us.
+The cross validation results showed us that the best the NN can do witn new data
+is around 26.8% misclassification rate.
+
+### b) Fitting a Classification Tree
+
+```{r}
+# library(MASS)
+########### Problem 4 begins here ################### 
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+# str(fgl)
+```
+
+The best cp appears to be at .046 judging by the graph below
+
+```{r, fig.height=3}
+classTree = rpart(type ~ ., data = fgl, method = 'class', xval = 10) # Fitting Classification Tree
+plotcp(classTree)
+```
+
+Output of printcp()
+
+```{r}
+printcp(classTree)
+```
+
+From the graph and the table, it appears that the best cp is .03623 with 4 splits.
+I'll now use this value to prune back the tree
+
+```{r}
+bestClassTree = prune(classTree, cp = 0.03623)
+bestClassTree$variable.importance
+```
+
+```{r}
+# install.packages("rpart.plot")
+rpart.plot::rpart.plot(bestClassTree, uniform = F)
+```
+
+Will calculate a classification error for the tree on its training data
+
+```{r}
+y = fgl$type
+phat = predict(bestClassTree, fgl[,c(1:9)])
+yhat = c()
+for (i in 1:length(phat[,1])){
+   typePrediction = types[which.max(phat[i,])]
+   yhat = c(yhat, typePrediction)
+}
+1-sum(yhat==y)/length(y)
+```
+
+Here's a confusion matrix for the tree predictions
+
+```{r}
+table(yhat, y)
+```
+
+
+### c) - Logistic Regression
+
+First I fit a logistic Regression. A preliminary step I've taken is to factor the response variable type
+
+```{r}
+fgl = read_excel('HW2_data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+fgl[['type']] = as.factor(fgl[['type']])
+nominalFit = multinom(type ~ . , data = fgl, maxit = 1000)
+summary(nominalFit)
+```
+
+below I calculate the p-values, because they are not provided by default
+
+```{r}
+z = summary(nominalFit)$coefficients / summary(nominalFit)$standard.errors
+p = (1 - pnorm(abs(z),0,1))*2
+p
+```
+
+Some predictors are insignificant when predicting for some of the response classes.
+I'll make predictions on the training data with this model and calculate the classification error
+
+```{r}
+yhat = factor(predict(nominalFit, fgl[,c(1:9)]))
+y = fgl$type
+# 1-sum(y == yhat)/length(y)
+ce(actual = y, predicted = yhat)
+```
+
+Useful to look at confusion matrix as well
+
+```{r}
+table(yhat, y)
+```
+
+### d) - Reviewing the results
+
+Overall, it looks like the logistic regression and the Classification Tree get the exact same misclassification rate of approx. 27%
+However, they have differing precision when it comes to the different classes.
+So, if we had a preference for making a prediction about a specific class, we could use the model which is more accurate for that class.
+
+The Neural Net, although doing very well on the entire training data (due to its extreme flexibility) still didn't bring any advantage over the other two models. It too had a misclassification rate of approximately 27%.
+
+My conclusion is that, with this dataset, that's probably just the best that we can do. As discussed above, Iw ould use the Logistic Regression or the Classification Tree depending on the usecase and keep the Neural Network as a back up if in the future we get a lot more data. I wouldn't use the NN for this situation, because it takes too long to fit.
+
+# Appendix
+
+This section is to be used for including your R code. The following lines of code will take care of it. Please make sure to comment your code appropriately - in particular, demarcating codes belonging to different questions. Among other things, it will be easier for you to debug your own code.
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
+
+

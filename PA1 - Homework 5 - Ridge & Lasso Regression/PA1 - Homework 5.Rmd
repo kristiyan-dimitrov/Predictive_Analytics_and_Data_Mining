@@ -1,0 +1,265 @@
+---
+title: "PA1 - Homework 5"
+author: "Parth Patel, Kristian Nikolov, Jieda Li, Kristiyan Dimitrov"
+date: "10/27/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exercise 5.4
+### Ridge Regression
+```{r}
+library(car)
+library(glmnet)
+library(MASS)
+
+# Importing Data
+mpg = read.csv("mpg.csv")
+str(mpg)
+```
+
+### Ridge Regression
+
+```{r}
+# Setting up data
+set.seed(123456789)
+y = mpg$mpg
+x = model.matrix(mpg~.,mpg)
+
+```
+
+```{r}
+# Performing Ridge fit
+ridgefit = glmnet(x, y, alpha=0,lambda=seq(0,10,0.001)) # alpha = 0 means Ridge Regresiion
+
+# Performing cross-validation to find the best value for the lambda hyper parameter
+ridgecv = cv.glmnet(x, y, alpha=0,lambda=seq(0,10,0.001),nfold=20)
+```
+
+```{r}
+# Examining the relationship between MSE and lambda
+plot(ridgecv)
+```
+
+```{r}
+# Finding the best lambda (where MSE is minimal)
+lambdaridge=ridgecv$lambda.min
+print(lambdaridge)
+```
+
+The best lambda turns out to be 0 i.e. Ridge regression boils down to regular Least Squares Regression.
+We tried changing the number of folds to 5, 10, 20, but the result was the same every time.
+Therefore, Ridge Regression doesn't help us reduce our multicollinearity issues.
+
+```{r}
+# Plotting the values of the betas w.r.t. lambda
+plot(ridgefit,xvar="lambda", main="Coeffs of Ridge Regression", type="l", 
+    xlab=expression("log_lambda"), ylab="Coeff")
+abline(h=0); abline(v=log(ridgecv$lambda.min))
+```
+
+```{r}
+# Finding out what our parameters are
+small.lambda.index <- which(ridgecv$lambda == ridgecv$lambda.min)
+small.lambda.betas <- coef(ridgecv$glmnet.fit)[,small.lambda.index]
+print(small.lambda.betas)
+```
+
+
+### Lasso Regression
+
+```{r}
+# Performing cross-validation for the Lasso Regression fit via the Generalized Linear Models (glm) command
+lassofit=glmnet(x, y, alpha=1,lambda=seq(0,10,0.001))
+lassocv = cv.glmnet(x,y,alpha=1,lambda=seq(0,10,0.001),nfold=20)
+```
+
+```{r}
+# Plotting average MSE from cross-validation w.r.t. lambda
+plot(lassocv)
+```
+
+```{r}
+# We retrieve the minimum lambda
+lambdalasso=lassocv$lambda.min
+print(lambdalasso)
+```
+
+```{r}
+# Exploring values of betas w.r.t. lambda
+plot(lassofit,xvar="lambda",label=TRUE, main="Coeffs of Lasso Regression", type="l", 
+    xlab=expression("log_lambda"), ylab="Coeff") # Notice one of the betas is 0
+abline(h=0); abline(v=log(lassocv$lambda.min)) 
+```
+
+```{r}
+# Retrieving the unstandardized coefficients for the Lasso Regression
+small.lambda.index <- which(lassocv$lambda == lassocv$lambda.min)
+small.lambda.betas <- coef(lassocv$glmnet.fit)[,small.lambda.index]
+print(small.lambda.betas)
+```
+
+We see that the variables left by Lasso Regression are cylinders, displacement, horse power and weight.
+acceleration was dropped.
+
+## Exercise 5.5
+
+```{r}
+library(car)
+library(glmnet)
+library(MASS)
+
+# Importing Data
+acetylene = read.csv("acetylene.csv")
+str(acetylene)
+```
+
+### Ridge Regression
+
+```{r}
+# Setting up data
+set.seed(123456789)
+y = acetylene$y
+x = model.matrix(y~.,acetylene)
+
+```
+
+```{r}
+# Performing Ridge fit
+ridgefit = glmnet(x, y, alpha=0,lambda=seq(0,10,0.001)) # alpha = 0 means Ridge Regresiion
+
+# Performing cross-validation to find the best value for the lambda hyper parameter
+ridgecv = cv.glmnet(x, y, alpha=0,lambda=seq(0,10,0.001),nfold=5)
+```
+
+```{r}
+# Examining the relationship between MSE and lambda
+plot(ridgecv)
+```
+
+```{r}
+# Finding the best lambda (where MSE is minimal)
+lambdaridge=ridgecv$lambda.min
+print(lambdaridge)
+```
+
+The best lambda turns out to be .0186 i.e. Ridge regression boils down to regular Least Squares Regression.
+We tried changing the number of folds to 5, 10, 20, but the result was the same every time.
+Therefore, Ridge Regression doesn't help us reduce our multicollinearity issues.
+
+```{r}
+# Plotting the values of the betas w.r.t. lambda
+plot(ridgefit,xvar="lambda", main="Coeffs of Ridge Regression", type="l", 
+    xlab=expression("log_lambda"), ylab="Coeff")
+abline(h=0); abline(v=log(ridgecv$lambda.min))
+```
+
+```{r}
+# Finding out what our parameters are
+small.lambda.index <- which(ridgecv$lambda == ridgecv$lambda.min)
+small.lambda.betas <- coef(ridgecv$glmnet.fit)[,small.lambda.index]
+print(small.lambda.betas)
+```
+We see that many of the coefficients shrink significantly
+
+### Lasso Regression
+
+```{r}
+# Performing cross-validation for the Lasso Regression fit via the Generalized Linear Models (glm) command
+lassofit=glmnet(x, y, alpha=1,lambda=seq(0,10,0.001))
+lassocv = cv.glmnet(x,y,alpha=1,lambda=seq(0,10,0.001),nfold=5)
+```
+
+```{r}
+# Plotting average MSE from cross-validation w.r.t. lambda
+plot(lassocv)
+```
+
+```{r}
+# We retrieve the minimum lambda
+lambdalasso=lassocv$lambda.min
+print(lambdalasso)
+```
+
+```{r}
+# Exploring values of betas w.r.t. lambda
+plot(lassofit,xvar="lambda",label=TRUE, main="Coeffs of Lasso Regression", type="l", 
+    xlab=expression("log_lambda"), ylab="Coeff") # Notice one of the betas is 0
+abline(h=0); abline(v=log(lassocv$lambda.min)) 
+```
+
+```{r}
+# Retrieving the unstandardized coefficients for the Lasso Regression
+small.lambda.index <- which(lassocv$lambda == lassocv$lambda.min)
+small.lambda.betas <- coef(lassocv$glmnet.fit)[,small.lambda.index]
+print(small.lambda.betas)
+```
+
+Lasso Regression removes all variables except x1x3, x2x3, x1^2, x2^2
+
+## Exercise 6.2 - Hamilton Data
+### a)
+```{r}
+# Importing Data
+hamilton = read.csv("Hamilton.csv")
+str(hamilton)
+```
+
+```{r}
+# Calculating the correlation matrix b/w the three variables
+cor(hamilton)
+length(hamilton$y)
+```
+
+We note that the correlation b/w/ y & x1 is very small (.0025) while the correlation b/w/ x2 and y appears to be larger (.434)
+
+```{r}
+# Making a 3D Scatter Plot
+# install.packages("plotly")
+library(plotly)
+plot_ly(data = hamilton, x = ~x1, y = ~x2, z = hamilton$y, colors = '#0C4B8E') %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'x1'),
+                     yaxis = list(title = 'x2'),
+                     zaxis = list(title = 'y')))
+
+```
+
+We note that the data appears to sit in a single plane in 3D space. This means that y is in the span of x1 & x2 i.e. y can be represented as a linear representation of x1 & x2.
+
+```{r}
+# Let's run a regression
+lmfit1 = lm(y ~ x1 + x2, data = hamilton)
+summary(lmfit1)
+```
+
+The model we fitted confirms our suspicion, the line fits the data almost perfectly, hence the very high R^2 and t values for predictors.
+
+### b)
+```{r}
+# Let's investigate how a backward stepwise regression will behave:
+?step
+step(lmfit1,direction="backward")
+```
+```{r}
+# What happens if we do forward stepwise?
+lmfit2 = lm(y ~ 1, hamilton) # Start just with an intercept term i.e. a constant = 1.
+summary(lmfit2)
+step(lmfit2,direction="forward",scope=~x1+x2)
+```
+
+```{r}
+# What if we use the both option?
+lmfit3 = lm(y ~ ., hamilton) # Start just with an intercept term i.e. a constant = 1.
+summary(lmfit3)
+step(lmfit3,direction="both")
+```
+
+We see that in all three instances, we are left with both predictors x1 & x2
+
+?? "In this case, backward selection tends to select the best model since it starts from the full model and would be reluctant to drop any predictor. However, forward selection would be problematic, since it would not include the model with less significant F statistic."??

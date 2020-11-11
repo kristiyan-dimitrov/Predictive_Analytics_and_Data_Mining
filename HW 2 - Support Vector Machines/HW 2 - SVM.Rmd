@@ -1,0 +1,424 @@
+---
+title: "HW 2 - SVM"
+author: "Kristiyan Dimitrov"
+date: "11/7/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+Goal: to predict whether or not a student was admitted to graduate school based on the other data, using Support Vector Machines (SVM)
+
+### Part a)
+
+```{r}
+library(e1071) # Loading required library with SVM function
+library(caret)
+library(NMOF) # This package is required to use the gridSearch function, which will make tuning multiple hyperparameters much easier
+gradAdmit = read.csv('gradAdmit.csv') #Importing data
+set.seed(1100) # Setting the random seed to ensure reproducibility of results
+
+n = nrow(gradAdmit) # number of students in dataset
+
+# Sampling approximately 20% of the indices
+testIndices = sample.int(n = n, size = floor(.2*n), replace = F) #80 indices, randomly drawn from 1-400
+
+# Taking all the data except that at the sampled indices as training data
+trainData = gradAdmit[-testIndices,]
+str(trainData)
+# Taking all the data at the sampled indices as training data
+testData = gradAdmit[testIndices,]
+str(testData)
+```
+
+```{r}
+nfolds = 5
+sizeTrainingData = nrow(trainData)
+folds = createFolds(1:sizeTrainingData, k=nfolds)
+folds # We see that we have precisely 320/5 = 64 indices in each fold
+```
+
+
+### Part b)
+#### Reporting accuracy for each fold, for both training & validation data, for the three types of kernels
+All the below is using default values for the hyper parameters. I'll tune them after I report the required accuracy values
+
+Linear kernel
+```{r}
+
+# Calculating accuracy of SVM on training & validation data, using RADIAL BASIS KERNEL
+linear_kernel_trainFolds_accuracy <- c()
+linear_kernel_validationFold_accuracy <- c()
+
+for (i in 1:nfolds){
+    trainFolds = trainData[-folds[[i]],]
+    validationFold = trainData[folds[[i]],]
+    # Train model based on trainFolds
+    svm = svm(factor(admit)~., kernel = 'linear', data=trainFolds)
+    
+    # 1) Apply model to trainFolds
+    pred = predict(svm, newdata=trainFolds, type = 'response')
+    
+    # 2) Calculate accuracy of model on trainFolds
+    accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+    
+    # 3) Adding linear kernel accuracy of model applied to training data to corresponding collection
+    linear_kernel_trainFolds_accuracy <- c(linear_kernel_trainFolds_accuracy, accuracy_trainFolds)
+    
+    # 1) Apply model to validationFold
+    pred = predict(svm, newdata = validationFold, type = 'response')
+    
+    # 2) Calculate accuracy of model on validationFold
+    accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+    
+    # 3) Adding linear kernel accuracy of model applied to validation data to corresponding collection
+   linear_kernel_validationFold_accuracy <- c(linear_kernel_validationFold_accuracy, accuracy_validationFold)
+}
+print("Accuracy on training data for each fold")
+linear_kernel_trainFolds_accuracy
+print("Average accuracy on training Data")
+mean(linear_kernel_trainFolds_accuracy)
+print("Accuracy on Validation Data for each fold")
+linear_kernel_validationFold_accuracy
+print("Average accuracy on Validation Data")
+mean(linear_kernel_validationFold_accuracy)
+```
+
+Polynomial kernel
+```{r}
+
+# Calculating accuracy of SVM on training & validation data, using RADIAL BASIS KERNEL
+polynomial_kernel_trainFolds_accuracy <- c()
+polynomial_kernel_validationFold_accuracy <- c()
+
+for (i in 1:nfolds){
+    trainFolds = trainData[-folds[[i]],]
+    validationFold = trainData[folds[[i]],]
+    # Train model based on trainFolds
+    svm = svm(factor(admit)~., kernel = 'polynomial', data=trainFolds)
+    
+    # 1) Apply model to trainFolds
+    pred = predict(svm, newdata=trainFolds, type = 'response')
+    
+    # 2) Calculate accuracy of model on trainFolds
+    accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+    
+    # 3) Adding polynomial kernel accuracy of model applied to training data to corresponding collection
+    polynomial_kernel_trainFolds_accuracy <- c(polynomial_kernel_trainFolds_accuracy, accuracy_trainFolds)
+    
+    # 1) Apply model to validationFold
+    pred = predict(svm, newdata = validationFold, type = 'response')
+    
+    # 2) Calculate accuracy of model on validationFold
+    accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+    
+    # 3) Adding polynomial kernel accuracy of model applied to validation data to corresponding collection
+   polynomial_kernel_validationFold_accuracy <- c(polynomial_kernel_validationFold_accuracy, accuracy_validationFold)
+}
+print("Accuracy on training data for each fold")
+polynomial_kernel_trainFolds_accuracy
+print("Average accuracy on training Data")
+mean(polynomial_kernel_trainFolds_accuracy)
+print("Accuracy on Validation Data for each fold")
+polynomial_kernel_validationFold_accuracy
+print("Average accuracy on Validation Data")
+mean(polynomial_kernel_validationFold_accuracy)
+```
+
+RadialBasis kernel
+```{r}
+
+# Calculating accuracy of SVM on training & validation data, using RADIAL BASIS KERNEL
+radialBasis_kernel_trainFolds_accuracy <- c()
+radialBasis_kernel_validationFold_accuracy <- c()
+
+for (i in 1:nfolds){
+    trainFolds = trainData[-folds[[i]],]
+    validationFold = trainData[folds[[i]],]
+    # Train model based on trainFolds
+    svm = svm(factor(admit)~., kernel = 'radial', data=trainFolds)
+    
+    # 1) Apply model to trainFolds
+    pred = predict(svm, newdata=trainFolds, type = 'response')
+    
+    # 2) Calculate accuracy of model on trainFolds
+    accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+    
+    # 3) Adding radialBasis kernel accuracy of model applied to training data to corresponding collection
+    radialBasis_kernel_trainFolds_accuracy <- c(radialBasis_kernel_trainFolds_accuracy, accuracy_trainFolds)
+    
+    # 1) Apply model to validationFold
+    pred = predict(svm, newdata = validationFold, type = 'response')
+    
+    # 2) Calculate accuracy of model on validationFold
+    accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+    
+    # 3) Adding radialBasis kernel accuracy of model applied to validation data to corresponding collection
+   radialBasis_kernel_validationFold_accuracy <- c(radialBasis_kernel_validationFold_accuracy, accuracy_validationFold)
+}
+print("Accuracy on training data for each fold")
+radialBasis_kernel_trainFolds_accuracy
+print("Average accuracy on training Data")
+mean(radialBasis_kernel_trainFolds_accuracy)
+print("Accuracy on Validation Data for each fold")
+radialBasis_kernel_validationFold_accuracy
+print("Average accuracy on Validation Data")
+mean(radialBasis_kernel_validationFold_accuracy)
+```
+
+
+### Tuning hyperparameters
+#### Using LINEAR Kernel
+
+```{r}
+# Defininig function, which takes parameter cost (the only variable we can set for the linear kernel)
+linear_kernel_svm <- function(cost = 1){
+
+      # Calculating accuracy of SVM on training & validation data, using LINEAR KERNEL
+      linear_kernel_trainFolds_accuracy <- c()
+      linear_kernel_validationFold_accuracy <- c()
+      
+      for (i in 1:nfolds){
+          trainFolds = trainData[-folds[[i]],]
+          validationFold = trainData[folds[[i]],]
+          # Train model based on trainFolds
+          svm = svm(factor(admit)~., kernel = 'linear', data=trainFolds, cost = cost)
+          
+          # 1) Apply model to trainFolds
+          pred = predict(svm, newdata=trainFolds, type = 'response')
+          
+          # 2) Calculate accuracy of model on trainFolds
+          accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+          
+          # 3) Adding linear kernel accuracy of model applied to training data to corresponding collection
+          linear_kernel_trainFolds_accuracy <- c(linear_kernel_trainFolds_accuracy, accuracy_trainFolds)
+          
+          # 1) Apply model to validationFold
+          pred = predict(svm, newdata = validationFold, type = 'response')
+          
+          # 2) Calculate accuracy of model on validationFold
+          accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+          
+          # 3) Adding linear kernel accuracy of model applied to validation data to corresponding collection
+          linear_kernel_validationFold_accuracy <- c(linear_kernel_validationFold_accuracy, accuracy_validationFold)
+      }
+      # print("Accuracy on training data")
+      # linear_kernel_trainFolds_accuracy
+      # mean(linear_kernel_trainFolds_accuracy)
+      # print("Accuracy on Validation Data")
+      # linear_kernel_validationFold_accuracy
+      # mean(linear_kernel_validationFold_accuracy)
+      
+      return (list("Accuracy on training data",mean(linear_kernel_trainFolds_accuracy), "Accuracy on Validation Data", mean(linear_kernel_validationFold_accuracy)))
+}
+```
+
+```{r}
+# Below we tune the cost parameter
+linear_kernel_validation_accuracy_cost_parameter <- c()
+best_cost = 1
+for (i in seq(.02,10,.01)){
+  
+  linear_kernel_validation_accuracy_cost_parameter<- c(linear_kernel_validation_accuracy_cost_parameter, linear_kernel_svm(cost = i)[4])
+  prev_cost = i-.01
+  prev_accuracy = linear_kernel_svm(cost = prev_cost)[4]
+  if(linear_kernel_svm(cost = i)[4] > unlist(prev_accuracy)){
+    best_cost = i
+  }
+}
+```
+
+The best cost parameter appears to be .36. 
+
+At that value, the accuracy of the SVM on the validation data is .0.6875.
+Inspecting the "linear_kernel_validation_accuracy_cost_parameter" I see that for all greate values the accuracy is slightly less at: 0.678125 and at all lower values it is 0.684375 (again slightly less)
+
+```{r}
+best_cost
+linear_kernel_validation_accuracy_cost_parameter[30:40]
+```
+
+
+### Using POLYNOMIAL Kernel
+
+```{r}
+# Calculating accuracy of SVM on training & validation data, using POLYNOMIAL KERNEL
+polynomial_kernel_trainFolds_accuracy <- c()
+polynomial_kernel_validationFold_accuracy <- c()
+
+polynomial_kernel_svm <- function(arguments){
+      for (i in 1:nfolds){
+          trainFolds = trainData[-folds[[i]],]
+          validationFold = trainData[folds[[i]],]
+          # Train model based on trainFolds
+          svm = svm(factor(admit)~., kernel = 'polynomial', degree = arguments[1L], gamma = arguments[2L], coef0 = arguments[3L], cost = arguments[4L], data=trainFolds)
+          
+          # 1) Apply model to trainFolds
+          pred = predict(svm, newdata=trainFolds, type = 'response')
+          
+          # 2) Calculate accuracy of model on trainFolds
+          accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+          
+          # 3) Adding polynomial kernel accuracy of model applied to training data to corresponding collection
+          polynomial_kernel_trainFolds_accuracy <- c(polynomial_kernel_trainFolds_accuracy, accuracy_trainFolds)
+          
+          # 1) Apply model to validationFold
+          pred = predict(svm, newdata = validationFold, type = 'response')
+          
+          # 2) Calculate accuracy of model on validationFold
+          accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+          
+          # 3) Adding polynomial kernel accuracy of model applied to validation data to corresponding collection
+          polynomial_kernel_validationFold_accuracy <- c(polynomial_kernel_validationFold_accuracy, accuracy_validationFold)
+      }
+# print("Accuracy on training data")
+# polynomial_kernel_trainFolds_accuracy
+# mean(polynomial_kernel_trainFolds_accuracy)
+# print("Accuracy on Validation Data")
+# polynomial_kernel_validationFold_accuracy
+# mean(polynomial_kernel_validationFold_accuracy)
+          return  (mean(polynomial_kernel_validationFold_accuracy))
+
+}
+```
+
+```{r}
+# Examining accuracy on validationFold with GridSearch
+# More specifically, we are checking degree 2,3,4,5 and gamma, coef0, and cost between .1 and 1 in increments of .1
+# First sequence is for degree, second sequence for gamma, third sequence for coef0, 4th sequence for cost
+argument_ranges = list(seq(2:5), seq(.1,1,.1), seq(.1,1,.1), seq(.1,1,.1)) 
+
+solution_polynomial <- gridSearch(polynomial_kernel_svm,levels = argument_ranges)
+```
+```{r}
+print("This is the highest accuracy we managed to get from the polynomial kernel")
+max(solution_polynomial$values)
+print("The values for the hyperparameters at this maximum accuracy are")
+parameters = solution_polynomial$levels[[match(max(solution_polynomial$values),solution_polynomial$values)]] 
+print(paste("degree",str(parameters[1])))
+print(paste("gamma" , str(parameters[2])))
+print(paste("coef0" , str(parameters[3])))
+print(paste("cost" , str(parameters[4])))
+```
+
+We see degree is best at 2, we'll leave it at 2
+We see that coef0 is best at 0.9, we'll leave it at 0.9
+We see that cost should be low, we'll leave it at 0.1
+
+Only for gamma, we see that it is best at 1, which was the highest value we allowed.
+Let's check if larger values will improve accuracy:
+```{r}
+argument_ranges_2 = list(2, seq(1,2,.01), .9, .1) 
+
+solution_polynomial_2 <- gridSearch(polynomial_kernel_svm,levels = argument_ranges_2)
+```
+```{r}
+print("This is the highest accuracy we managed to get from the polynomial kernel")
+max(solution_polynomial_2$values)
+print("The values for the hyperparameters at this maximum accuracy are")
+parameters = solution_polynomial_2$levels[[match(max(solution_polynomial_2$values),solution_polynomial_2$values)]] 
+print(paste("gamma" , str(parameters[2])))
+
+```
+
+Apparently, gamma = 1 is the best value for the polynomial kernel.
+
+### Using RADIAL BASIS Kernel
+
+```{r}
+# Calculating accuracy of SVM on training & validation data, using RADIAL BASIS KERNEL
+radialBasis_kernel_trainFolds_accuracy <- c()
+radialBasis_kernel_validationFold_accuracy <- c()
+
+radialBasis_kernel_svm <- function(arguments){
+for (i in 1:nfolds){
+    trainFolds = trainData[-folds[[i]],]
+    validationFold = trainData[folds[[i]],]
+    # Train model based on trainFolds
+    svm = svm(factor(admit)~., kernel = 'radial', data=trainFolds, gamma = arguments[1L], cost = arguments[2L])
+    
+    # 1) Apply model to trainFolds
+    pred = predict(svm, newdata=trainFolds, type = 'response')
+    
+    # 2) Calculate accuracy of model on trainFolds
+    accuracy_trainFolds = length(which(pred == trainFolds[[1]])) / length(pred) # The 'which' function checks how many matches there are between the prediction and the trainFolds data. We then find what percentage of the data was correctly predicted
+    
+    # 3) Adding radialBasis kernel accuracy of model applied to training data to corresponding collection
+    radialBasis_kernel_trainFolds_accuracy <- c(radialBasis_kernel_trainFolds_accuracy, accuracy_trainFolds)
+    
+    # 1) Apply model to validationFold
+    pred = predict(svm, newdata = validationFold, type = 'response')
+    
+    # 2) Calculate accuracy of model on validationFold
+    accuracy_validationFold = length(which(pred == validationFold[[1]])) / length(pred)
+    
+    # 3) Adding radialBasis kernel accuracy of model applied to validation data to corresponding collection
+   radialBasis_kernel_validationFold_accuracy <- c(radialBasis_kernel_validationFold_accuracy, accuracy_validationFold)
+  }
+# print("Accuracy on training data")
+# radialBasis_kernel_trainFolds_accuracy
+# mean(radialBasis_kernel_trainFolds_accuracy)
+# print("Accuracy on Validation Data")
+# radialBasis_kernel_validationFold_accuracy
+# mean(radialBasis_kernel_validationFold_accuracy)
+  
+   return  (mean(radialBasis_kernel_validationFold_accuracy))
+}
+```
+
+```{r}
+# Examining accuracy on validationFold with GridSearch
+# More specifically, we are checking gamma and cost between .1 and 2 in increments of .1
+# First sequence is for gamma and second sequence for cost
+argument_ranges = list(seq(.1,2,.1), seq(.1,2,.1)) 
+
+solution_radialBasis <- gridSearch(radialBasis_kernel_svm,levels = argument_ranges)
+```
+```{r}
+print("This is the highest accuracy we managed to get from the radialBasis kernel")
+max(solution_polynomial$values)
+print("The values for the hyperparameters at this maximum accuracy are")
+parameters = solution_radialBasis$levels[[match(max(solution_radialBasis$values),solution_radialBasis$values)]] 
+print(paste("gamma",str(parameters[1])))
+print(paste("cost" , str(parameters[2])))
+```
+
+We see that we get the same accuracy as with the polynomial kernel but at different parameter values!
+gamma = 1.3 and cost = 0.8.
+
+### Part c)
+The Radial Basis kernel performed the same as the polynomial kernel, but showed slightly better accuracy before the tuning, so I will use it for part C
+
+```{r}
+# Training best model from part b) on full training data
+# Recall, our best model uses: Radial Basis Kernel with gamma = 1.3 and cost = 0.8
+
+svm_best = svm(factor(admit)~., kernel = 'radial', gamma = 1.3, cost = 0.8, data=trainData)
+summary(svm_best)
+```
+
+```{r}
+# Applying best model to our untouched test data
+test_pred = predict(svm_best, newdata=testData, type = 'response')
+test_pred
+```
+
+```{r}
+# Calculating accuracy
+accuracy_testData = length(which(test_pred == testData[[1]])) / length(test_pred)
+accuracy_testData
+```
+
+```{r}
+# Below I calculate what percentage of students are not admitted
+1-mean(unlist(gradAdmit["admit"]))
+```
+
+Based on the output, it might be a better idea if we just say "All students won't be admitted".
+That way, we can expect to be right 68.25% of the time.
+With our SVM model, on the other hand, it appears we would be right only 60% of the time.

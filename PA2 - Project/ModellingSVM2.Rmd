@@ -1,0 +1,80 @@
+---
+title: "ModellingSVM2"
+author: "Kristiyan Dimitrov"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(e1071) # Loading required library with SVM function
+library(caret) # For Cross Validation Hyperparameter tuning
+library(NMOF) # This package is required to use the gridSearch function, which will make tuning multiple hyperparameters much easier
+```
+
+
+#Load the Data
+
+```{r}
+library(tidyverse)
+library(dplyr)
+#load data 
+crash = read.csv("crash_clean31020.csv", stringsAsFactors = TRUE)
+crash = as_tibble(crash)
+#normalizing numeric variables/factorizing whatever wasn't
+crash$ROAD_DEFECT = as.factor(crash$ROAD_DEFECT)
+crash$CRASH_HOUR = as.factor(crash$CRASH_HOUR)
+crash$CRASH_DAY_OF_WEEK = as.factor(crash$CRASH_DAY_OF_WEEK)
+crash$CRASH_MONTH = as.factor(crash$CRASH_MONTH)
+crash$isHoliday = as.factor(crash$isHoliday)
+crash$isRush = as.factor(crash$isRush)
+crash$INJURIES_TOTAL_BINARY = as.factor(crash$INJURIES_TOTAL_BINARY)
+crash = crash %>%
+  select(-c("LATITUDE", "LONGITUDE", "NUM_UNITS", "PRIM_CONTRIBUTORY_CAUSE", "REPORT_TYPE",
+            "INJURIES_NO_INDICATION", "X", "FIRST_CRASH_TYPE","CRASH_HOUR","CRASH_DAY_OF_WEEK","CRASH_MONTH"))
+```
+
+```{r}
+str(crash)
+```
+
+```{r}
+head(crash)
+```
+
+# Try some Hyperparameter Tuning
+
+```{r}
+crash = as.data.frame(crash[1:20000,])
+table(crash$INJURIES_TOTAL_BINARY)
+```
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .1, data=crash, cost = .2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+```{r}
+radialSVM1 = svm(INJURIES_TOTAL_BINARY ~ ., kernel = 'radial', gamma = .1, data=crash, cost = 2, cross=3)
+radialSVM1$accuracies
+radialSVM1$tot.accuracy
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

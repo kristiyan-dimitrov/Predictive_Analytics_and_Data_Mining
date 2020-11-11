@@ -1,0 +1,637 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Homework 8},
+            pdfauthor={Kristiyan Dimitrov, Jieda Li, Parth Patel, Kristian Nikolov},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\providecommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Homework 8}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{Kristiyan Dimitrov, Jieda Li, Parth Patel, Kristian Nikolov}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{11/29/2019}
+
+
+\begin{document}
+\maketitle
+
+\hypertarget{exercise-8.5}{%
+\subsection{Exercise 8.5}\label{exercise-8.5}}
+
+\hypertarget{a}{%
+\subsubsection{a)}\label{a}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Import Data}
+\NormalTok{iris =}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Iris.csv"}\NormalTok{)}
+\KeywordTok{str}\NormalTok{(iris)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 'data.frame':    150 obs. of  6 variables:
+##  $ Species_No  : int  1 1 1 1 1 1 1 1 1 1 ...
+##  $ Petal_width : num  0.2 0.2 0.2 0.2 0.2 0.4 0.3 0.2 0.2 0.1 ...
+##  $ Petal_length: num  1.4 1.4 1.3 1.5 1.4 1.7 1.4 1.5 1.4 1.5 ...
+##  $ Sepal_width : num  3.5 3 3.2 3.1 3.6 3.9 3.4 3.4 2.9 3.1 ...
+##  $ Sepal_length: num  5.1 4.9 4.7 4.6 5 5.4 4.6 5 4.4 4.9 ...
+##  $ Species_name: Factor w/ 3 levels " Setosa"," Verginica",..: 1 1 1 1 1 1 1 1 1 1 ...
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(MASS)}
+\NormalTok{irisLDA =}\StringTok{ }\KeywordTok{lda}\NormalTok{(Species_name }\OperatorTok{~}\StringTok{ }\NormalTok{Petal_width }\OperatorTok{+}\StringTok{ }\NormalTok{Petal_length }\OperatorTok{+}\StringTok{ }\NormalTok{Sepal_width }\OperatorTok{+}\StringTok{ }\NormalTok{Sepal_length, }\DataTypeTok{data =}\NormalTok{ iris, }\DataTypeTok{prior=}\KeywordTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{1}\NormalTok{,}\DecValTok{1}\NormalTok{)}\OperatorTok{/}\DecValTok{3}\NormalTok{) }\CommentTok{# Calculate Fisher's Linear Discriminant Functions}
+\NormalTok{irisLDA }\CommentTok{# At the very end of the output we can see that most of the separability is captured by the first Linear Discriminant Function (LD1 - 99.12%)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Call:
+## lda(Species_name ~ Petal_width + Petal_length + Sepal_width + 
+##     Sepal_length, data = iris, prior = c(1, 1, 1)/3)
+## 
+## Prior probabilities of groups:
+##      Setosa   Verginica  Versicolor 
+##   0.3333333   0.3333333   0.3333333 
+## 
+## Group means:
+##             Petal_width Petal_length Sepal_width Sepal_length
+##  Setosa           0.246        1.462       3.428        5.006
+##  Verginica        2.026        5.552       2.974        6.588
+##  Versicolor       1.326        4.260       2.770        5.936
+## 
+## Coefficients of linear discriminants:
+##                     LD1         LD2
+## Petal_width  -2.8104603 -2.83918785
+## Petal_length -2.2012117  0.93192121
+## Sepal_width   1.5344731 -2.16452123
+## Sepal_length  0.8293776 -0.02410215
+## 
+## Proportion of trace:
+##    LD1    LD2 
+## 0.9912 0.0088
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{irisLDA[}\DecValTok{4}\NormalTok{] }\CommentTok{# These are the coefficients of the Fisher Discriminant functions}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $scaling
+##                     LD1         LD2
+## Petal_width  -2.8104603 -2.83918785
+## Petal_length -2.2012117  0.93192121
+## Sepal_width   1.5344731 -2.16452123
+## Sepal_length  0.8293776 -0.02410215
+\end{verbatim}
+
+\hypertarget{b}{%
+\subsubsection{b)}\label{b}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{predict}\NormalTok{( irisLDA, }\DataTypeTok{newdata =} \KeywordTok{data.frame}\NormalTok{(}\DataTypeTok{Sepal_width =} \DecValTok{3}\NormalTok{, }\DataTypeTok{Sepal_length =} \FloatTok{5.5}\NormalTok{, }\DataTypeTok{Petal_width =} \FloatTok{1.5}\NormalTok{, }\DataTypeTok{Petal_length =} \DecValTok{4}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $class
+## [1]  Versicolor
+## Levels:  Setosa  Verginica  Versicolor
+## 
+## $posterior
+##         Setosa    Verginica  Versicolor
+## 1 1.962381e-19 0.0006246577   0.9993753
+## 
+## $x
+##         LD1        LD2
+## 1 -1.750434 -0.4957499
+\end{verbatim}
+
+We see that Versicolor has the highest probability therefore we would
+classify this observation as Versicolor
+
+\hypertarget{exercise-9.3}{%
+\subsection{Exercise 9.3}\label{exercise-9.3}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Import Data}
+\NormalTok{injury =}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Airline-Injury.csv"}\NormalTok{)}
+\KeywordTok{str}\NormalTok{(injury)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 'data.frame':    9 obs. of  2 variables:
+##  $ x: num  0.095 0.192 0.075 0.208 0.138 ...
+##  $ y: int  11 7 7 19 9 4 3 1 3
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{plot}\NormalTok{(injury)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{Homework-8_files/figure-latex/unnamed-chunk-6-1.pdf}
+
+\hypertarget{part-1---simple-linear-regression-with-no-transformation-on-y}{%
+\subsubsection{Part 1 - Simple linear regression with no transformation
+on
+y}\label{part-1---simple-linear-regression-with-no-transformation-on-y}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Using lm() function}
+\NormalTok{lmfit =}\StringTok{ }\KeywordTok{lm}\NormalTok{(y }\OperatorTok{~}\StringTok{ }\NormalTok{x, }\DataTypeTok{data =}\NormalTok{ injury)}
+\KeywordTok{summary}\NormalTok{(lmfit)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## lm(formula = y ~ x, data = injury)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -5.3351 -2.1281  0.1605  2.2670  5.6382 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)  
+## (Intercept)  -0.1402     3.1412  -0.045   0.9657  
+## x            64.9755    25.1959   2.579   0.0365 *
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 4.201 on 7 degrees of freedom
+## Multiple R-squared:  0.4872, Adjusted R-squared:  0.4139 
+## F-statistic:  6.65 on 1 and 7 DF,  p-value: 0.03654
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# We check the SSE for the lm model}
+\KeywordTok{anova}\NormalTok{(lmfit)[}\DecValTok{2}\NormalTok{,}\DecValTok{2}\NormalTok{]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 123.5302
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Verifying SSE by direct calculation}
+\KeywordTok{sum}\NormalTok{(lmfit}\OperatorTok{$}\NormalTok{residuals}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 123.5302
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Using glm() function}
+\NormalTok{linearRegression =}\StringTok{ }\KeywordTok{glm}\NormalTok{(y }\OperatorTok{~}\StringTok{ }\NormalTok{x, }\DataTypeTok{data =}\NormalTok{ injury, }\DataTypeTok{family =}\NormalTok{ gaussian)}
+\KeywordTok{summary}\NormalTok{(linearRegression)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## glm(formula = y ~ x, family = gaussian, data = injury)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -5.3351  -2.1281   0.1605   2.2670   5.6382  
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)  
+## (Intercept)  -0.1402     3.1412  -0.045   0.9657  
+## x            64.9755    25.1959   2.579   0.0365 *
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for gaussian family taken to be 17.64717)
+## 
+##     Null deviance: 240.89  on 8  degrees of freedom
+## Residual deviance: 123.53  on 7  degrees of freedom
+## AIC: 55.114
+## 
+## Number of Fisher Scoring iterations: 2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# the Deviance for the linear model is actually SSE. We see the value is once again confirmed}
+\NormalTok{linearRegression}\OperatorTok{$}\NormalTok{deviance}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 123.5302
+\end{verbatim}
+
+\hypertarget{part-2---linear-regression-of-sqrt-transform-of-y}{%
+\section{Part 2 - Linear Regression of sqrt() transform of
+y}\label{part-2---linear-regression-of-sqrt-transform-of-y}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lmfitSqrt =}\StringTok{ }\KeywordTok{lm}\NormalTok{(}\KeywordTok{sqrt}\NormalTok{(y) }\OperatorTok{~}\StringTok{ }\NormalTok{x, }\DataTypeTok{data =}\NormalTok{ injury)}
+\KeywordTok{summary}\NormalTok{(lmfitSqrt)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## lm(formula = sqrt(y) ~ x, data = injury)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -0.9690 -0.7655  0.1906  0.5874  1.0211 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)  
+## (Intercept)   1.1692     0.5783   2.022   0.0829 .
+## x            11.8564     4.6382   2.556   0.0378 *
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.7733 on 7 degrees of freedom
+## Multiple R-squared:  0.4828, Adjusted R-squared:  0.4089 
+## F-statistic: 6.535 on 1 and 7 DF,  p-value: 0.03776
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{linearRegressionSqrtSSE =}\StringTok{ }\KeywordTok{sum}\NormalTok{((injury}\OperatorTok{$}\NormalTok{y }\OperatorTok{-}\StringTok{ }\NormalTok{lmfitSqrt}\OperatorTok{$}\NormalTok{fitted.values}\OperatorTok{^}\DecValTok{2}\NormalTok{)}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+\NormalTok{linearRegressionSqrtSSE}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 123.0247
+\end{verbatim}
+
+We see that the SSE for the sqrt() transformed y appears to be only
+slightly lower than the regular lm model. Furthermore, the variables are
+still reasonably significant. The plot below clearly shows that a linear
+fit is not the best idea. This is also supported by the low R\^{}2 we
+get for both models.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{plot}\NormalTok{(injury}\OperatorTok{$}\NormalTok{x, }\KeywordTok{sqrt}\NormalTok{(injury}\OperatorTok{$}\NormalTok{y) )}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{Homework-8_files/figure-latex/unnamed-chunk-14-1.pdf}
+
+\hypertarget{part-3---poisson-regression}{%
+\subsubsection{Part 3 - Poisson
+Regression}\label{part-3---poisson-regression}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{poissonRegression =}\StringTok{ }\KeywordTok{glm}\NormalTok{(y }\OperatorTok{~}\StringTok{ }\NormalTok{x  , }\DataTypeTok{data =}\NormalTok{ injury, }\DataTypeTok{family =}\NormalTok{ poisson)}
+\KeywordTok{summary}\NormalTok{(poissonRegression)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## glm(formula = y ~ x, family = poisson, data = injury)
+## 
+## Deviance Residuals: 
+##      Min        1Q    Median        3Q       Max  
+## -1.81894  -1.69082   0.06495   1.02407   2.06811  
+## 
+## Coefficients:
+##             Estimate Std. Error z value Pr(>|z|)    
+## (Intercept)   0.8945     0.3265   2.739  0.00615 ** 
+## x             8.5018     2.1575   3.941 8.13e-05 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 31.859  on 8  degrees of freedom
+## Residual deviance: 16.291  on 7  degrees of freedom
+## AIC: 52.251
+## 
+## Number of Fisher Scoring iterations: 5
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{poissonRegressionSSE =}\StringTok{ }\KeywordTok{sum}\NormalTok{((poissonRegression}\OperatorTok{$}\NormalTok{fitted.values }\OperatorTok{-}\StringTok{ }\NormalTok{injury}\OperatorTok{$}\NormalTok{y)}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+\NormalTok{poissonRegressionSSE}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 117.3472
+\end{verbatim}
+
+This is the lowest SSE model and also the model we'd prefer. - The
+variables are much more significant - The overall model deviance passes
+the chi-squared significance test
+
+\hypertarget{exercise-9.4}{%
+\subsection{Exercise 9.4}\label{exercise-9.4}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Import Data}
+\NormalTok{crash =}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/crashdata2014-summary.csv"}\NormalTok{)}
+\NormalTok{crash <-}\StringTok{ }\NormalTok{crash[}\OperatorTok{-}\DecValTok{1}\NormalTok{] }\CommentTok{# Dropping the index}
+\KeywordTok{str}\NormalTok{(crash)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 'data.frame':    1152 obs. of  8 variables:
+##  $ Day           : Factor w/ 2 levels "Weekday","Weekend": 1 2 1 2 1 2 1 2 1 2 ...
+##  $ Time          : Factor w/ 4 levels "Evening","Midday",..: 4 4 3 3 2 2 1 1 4 4 ...
+##  $ TrafficControl: Factor w/ 3 levels "Control","No Control",..: 2 2 2 2 2 2 2 2 1 1 ...
+##  $ Road          : Factor w/ 3 levels "Dry","Other",..: 1 1 1 1 1 1 1 1 1 1 ...
+##  $ Light         : Factor w/ 4 levels "Dark","Dawn/Dusk",..: 3 3 3 3 3 3 3 3 3 3 ...
+##  $ Weather       : Factor w/ 4 levels "Clear","Other",..: 1 1 1 1 1 1 1 1 1 1 ...
+##  $ Weight        : int  5 2 5 2 5 2 5 2 5 2 ...
+##  $ Count         : int  444 246 4147 951 5693 2193 3981 1210 239 121 ...
+\end{verbatim}
+
+\hypertarget{part-a---unweighted-poisson}{%
+\subsubsection{Part a) - Unweighted
+Poisson}\label{part-a---unweighted-poisson}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{unweightedPoisson =}\StringTok{ }\KeywordTok{glm}\NormalTok{(Count }\OperatorTok{~}\StringTok{ }\NormalTok{Day }\OperatorTok{+}\StringTok{ }\NormalTok{Time }\OperatorTok{+}\StringTok{ }\NormalTok{TrafficControl }\OperatorTok{+}\StringTok{ }\NormalTok{Road }\OperatorTok{+}\StringTok{ }\NormalTok{Light }\OperatorTok{+}\StringTok{ }\NormalTok{Weather, }\DataTypeTok{data =}\NormalTok{ crash, }\DataTypeTok{family =}\NormalTok{ poisson)}
+\KeywordTok{summary}\NormalTok{(unweightedPoisson)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## glm(formula = Count ~ Day + Time + TrafficControl + Road + Light + 
+##     Weather, family = poisson, data = crash)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -48.765   -4.197   -1.071    1.111   65.305  
+## 
+## Coefficients:
+##                           Estimate Std. Error  z value Pr(>|z|)    
+## (Intercept)               7.103091   0.010011  709.518   <2e-16 ***
+## DayWeekend               -0.966953   0.007781 -124.266   <2e-16 ***
+## TimeMidday               -0.008045   0.009227   -0.872    0.383    
+## TimeMorning              -0.222000   0.009763  -22.738   <2e-16 ***
+## TimeNight                -0.335498   0.010084  -33.270   <2e-16 ***
+## TrafficControlNo Control  0.089846   0.007090   12.671   <2e-16 ***
+## TrafficControlUnknown    -2.533891   0.018901 -134.063   <2e-16 ***
+## RoadOther                -2.273723   0.013582 -167.410   <2e-16 ***
+## RoadWet                  -1.134737   0.008412 -134.898   <2e-16 ***
+## LightDawn/Dusk           -2.034986   0.019172 -106.142   <2e-16 ***
+## LightDaylight             0.796045   0.007852  101.385   <2e-16 ***
+## LightUnknown             -1.784394   0.017190 -103.806   <2e-16 ***
+## WeatherOther             -2.587845   0.014941 -173.200   <2e-16 ***
+## WeatherPoor Visibilty    -3.598460   0.024209 -148.644   <2e-16 ***
+## WeatherRain/Snow         -1.665179   0.009906 -168.093   <2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 428848  on 1151  degrees of freedom
+## Residual deviance: 123720  on 1137  degrees of freedom
+## AIC: 127219
+## 
+## Number of Fisher Scoring iterations: 7
+\end{verbatim}
+
+Comments on coefficients: - DayWeekend has negative coefficient, which
+makes sense - fewer people drive on weekend --\textgreater{} fewer
+crashes - TimeMidday is not signicicant --\textgreater{} no real
+difference b/w Midday \& Evening, which makes sense , because the counts
+are almost the same (23,399 \& 23,588) - Time Morning \& Time Night -
+negative coefficients make sense, because there are fewer people driving
+in morning \& night than in evening (which is the reference category) -
+NoTrafficControl - positive coefficient makes sense - peple are more
+likely to speed and therefore crash with no traffic control - RoadWet -
+negative coefficient doesn't make much sense - would expect poor road
+conditions to increase crashes - LightDawn/Dusk - negative coefficient
+compared to reference category Dark doesn't make much sense. This
+variable is very correlated with Time, which probably explains the
+coefficients i.e.~signs are the same as Time Morning/Night -
+LightDaylight - same as above - WeatherPoor Visibility \& Rain Snow -
+correlated with RoadWet and the Light variables.
+
+\hypertarget{part-b---weighted-poisson}{%
+\subsubsection{Part b) - Weighted
+Poisson}\label{part-b---weighted-poisson}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{weightedPoisson =}\StringTok{ }\KeywordTok{glm}\NormalTok{(Count }\OperatorTok{~}\StringTok{ }\NormalTok{Day }\OperatorTok{+}\StringTok{ }\NormalTok{Time }\OperatorTok{+}\StringTok{ }\NormalTok{TrafficControl }\OperatorTok{+}\StringTok{ }\NormalTok{Road }\OperatorTok{+}\StringTok{ }\NormalTok{Light }\OperatorTok{+}\StringTok{ }\NormalTok{Weather , }\DataTypeTok{data =}\NormalTok{ crash, }\DataTypeTok{weights =}\NormalTok{ Weight, }\DataTypeTok{family =}\NormalTok{ poisson)}
+\KeywordTok{summary}\NormalTok{(weightedPoisson)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## glm(formula = Count ~ Day + Time + TrafficControl + Road + Light + 
+##     Weather, family = poisson, data = crash, weights = Weight)
+## 
+## Deviance Residuals: 
+##      Min        1Q    Median        3Q       Max  
+## -103.052    -6.938    -1.792     2.190   133.894  
+## 
+## Coefficients:
+##                           Estimate Std. Error  z value Pr(>|z|)    
+## (Intercept)               7.061573   0.004882 1446.573  < 2e-16 ***
+## DayWeekend               -0.966953   0.005027 -192.353  < 2e-16 ***
+## TimeMidday               -0.030746   0.004488   -6.851 7.31e-12 ***
+## TimeMorning              -0.179012   0.004666  -38.365  < 2e-16 ***
+## TimeNight                -0.481346   0.005095  -94.477  < 2e-16 ***
+## TrafficControlNo Control  0.067936   0.003468   19.590  < 2e-16 ***
+## TrafficControlUnknown    -2.567926   0.009342 -274.886  < 2e-16 ***
+## RoadOther                -2.281779   0.006684 -341.363  < 2e-16 ***
+## RoadWet                  -1.116644   0.004097 -272.569  < 2e-16 ***
+## LightDawn/Dusk           -1.961127   0.009426 -208.060  < 2e-16 ***
+## LightDaylight             0.904702   0.003923  230.590  < 2e-16 ***
+## LightUnknown             -1.757028   0.008629 -203.623  < 2e-16 ***
+## WeatherOther             -2.610596   0.007394 -353.064  < 2e-16 ***
+## WeatherPoor Visibilty    -3.568698   0.011684 -305.443  < 2e-16 ***
+## WeatherRain/Snow         -1.655916   0.004832 -342.703  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for poisson family taken to be 1)
+## 
+##     Null deviance: 1764135  on 1151  degrees of freedom
+## Residual deviance:  496975  on 1137  degrees of freedom
+## AIC: 509909
+## 
+## Number of Fisher Scoring iterations: 7
+\end{verbatim}
+
+We note the following: - The weightedPoisson has onemore significant
+variable (TimeMidday) - Has higher AIC - Has higher Residual Deviance
+
+Overall, the weightedPoisson doesn't change the size of the coefficients
+much, nore does it change their significance
+
+\hypertarget{appendix}{%
+\subsection{Appendix}\label{appendix}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{unweightedSSE =}\StringTok{ }\KeywordTok{sum}\NormalTok{((crash}\OperatorTok{$}\NormalTok{Count }\OperatorTok{-}\StringTok{ }\NormalTok{unweightedPoisson}\OperatorTok{$}\NormalTok{fitted.values)}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+\NormalTok{unweightedSSE}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 65068375
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{weightedSSE =}\StringTok{ }\KeywordTok{sum}\NormalTok{((crash}\OperatorTok{$}\NormalTok{Count }\OperatorTok{-}\StringTok{ }\NormalTok{(weightedPoisson}\OperatorTok{$}\NormalTok{fitted.values)}\OperatorTok{*}\NormalTok{(crash}\OperatorTok{$}\NormalTok{Weight))}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+\NormalTok{weightedSSE}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1096273154
+\end{verbatim}
+
+
+\end{document}

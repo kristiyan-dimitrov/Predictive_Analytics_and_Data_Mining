@@ -1,0 +1,70 @@
+options = rpart.control(minsplit = 5, cp = .021, maxdepth = 20) # Setting Classification tree options
+
+
+```{r}
+# SETTING UP GRID OF PARAMETER VALUES
+maxdepthRange = seq(1, 20, 2)
+cpRange = seq(.001, .01, .001)
+minsplitRange = seq (1, 20, 2)
+grid = expand.grid(maxdepthRange, cpRange, minsplitRange)
+names(grid) = c('maxdepth', 'cp','minsplit')
+head(grid)
+```
+
+```{r}
+# CALCULATING RMSE VIA CROSS VALIDATION WHILE RUNNING THROUGH THE GRID
+set.seed(42)
+n = nrow(fgl)
+K = 10
+
+# Number of potential models in the grid
+num_models <- nrow(grid)
+# Create the CV Indices
+indices = CVInd(n, K) # We'll be using the same folds for all models so this has to be computed only once!
+avgClassificationError = c()
+
+for (j in 1:num_models){
+  
+  cp = grid$cp[j]
+  maxdepth = grid$maxdepth[j]
+  minsplit = grid$minsplit[j]
+  classificationError = c()
+  
+  for (i in 1:K){
+  #   # SET TRAINING INDICES
+    trainingIndices = indices[[i]]
+    trainingData = fgl[-trainingIndices,]
+    validationData = fgl[trainingIndices,]
+
+    # Train a model and store in the list
+    model = rpart(formula = type ~ ., data = trainingData, method = "class", cp = cp, maxdepth = maxdepth, minsplit=minsplit)
+
+    yhat = c(rep(0, length(trainingIndices))) # Empty vector to hold all our predictions
+    
+    # Make a prediction for each element in the validation set
+    for (l in 1:length(trainingIndices)){
+      phat = predict(object = model, newdata = validationData[l,c(1:9)])
+      # Probabilitis for each outcome
+      typePrediction = types[which.max(phat)] # Predict the glass Type with the highest probability
+      yhat[l] = typePrediction
+    }
+     
+    # Compute Classification Error for this fold and add to vector
+    classificationError[i] = sum(validationData$type == yhat) / length(validationData$type)
+  #   
+  }
+
+  avgClassificationError = c(avgClassificationError, mean(classificationError))
+}
+```
+
+```{r}
+head(avgClassificationError, 55)
+```
+
+```{r}
+grid[which.min(avgClassificationError),]
+```
+
+
+

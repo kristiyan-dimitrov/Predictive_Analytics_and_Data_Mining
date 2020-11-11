@@ -1,0 +1,256 @@
+---
+title: "Homework 7"
+author: "Kristiyan Dimitrov"
+date: "11/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Exercise 7.12
+
+```{r}
+# Read in data
+pregnancy = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Pregnancy.csv")
+str(pregnancy)
+```
+
+```{r}
+# Transforming Age into categorical variable
+is.factor(pregnancy$Age) # Checking that Age is currently NOT a factor (categorical) variable
+pregnancy$Age <- factor(pregnancy$Age, ordered = FALSE) # Converting Age into an UNORDERED categorical varible)
+is.factor(pregnancy$Age) # Confirming it is now an UNORDERED factor
+pregnancy$Age <- relevel(pregnancy$Age, ref = "2") # Setting Age = 2 as the reference category
+table(pregnancy$Age) # The fact that 2 is listed first proves that it is the reference category (otherwise would be listed alphabetically: 1, 2, 3)
+```
+
+
+```{r}
+# Create training & test datasets
+oddrow = seq(1,nrow(pregnancy),2)
+trainingData = pregnancy[oddrow,]
+
+evenrow = seq(2,nrow(pregnancy),2)
+testData = pregnancy[evenrow,]
+
+str(trainingData)
+str(testData)
+```
+
+### a)
+
+```{r}
+# Fit Nominal Logistic Regression
+library(nnet) # Loading required library for Nominal Logistic Regression
+nominalFit = multinom(Duration ~ . , data = trainingData, maxit = 1000)
+summary(nominalFit)
+```
+
+```{r}
+# Making predictions on Test Data
+probabilitiesNominal = predict(nominalFit, type = 'probs', newdata = testData)
+head(probabilitiesNominal)
+
+probabilitiesNominal[1,]
+```
+
+```{r}
+predictedNominal = rep(0, nrow(probabilitiesNominal)) # Initializing empty vector to hold all our predictions
+
+# Setting the predictedNominal to the category with the highest probability for that observation
+for (i in 1:nrow(probabilitiesNominal)){
+  if ( max ( probabilitiesNominal[i,] ) == probabilitiesNominal[i,1] ) { predictedNominal[i] = 1} else
+  if ( max ( probabilitiesNominal[i,] ) == probabilitiesNominal[i,2] ) { predictedNominal[i] = 2} else
+  if ( max ( probabilitiesNominal[i,] ) == probabilitiesNominal[i,3] ) { predictedNominal[i] = 3}
+}
+
+predictedNominal
+```
+
+```{r}
+# Confusion table for Nominal predictions
+tableNominal = table(testData$Duration, predictedNominal)
+tableNominal # Note that the actuals are along the rows and predicted along the columns
+
+CCR_Nominal = sum(diag(tableNominal))/length(predictedNominal)
+CCR_Nominal
+```
+
+```{r}
+# CCR by Age category
+CCR_Age1 = tableNominal[1,1]/sum(tableNominal[1,])
+CCR_Age1
+CCR_Age2 = tableNominal[2,2]/sum(tableNominal[2,])
+CCR_Age2
+CCR_Age3 = tableNominal[3,3]/sum(tableNominal[3,])
+CCR_Age3
+```
+
+### b)
+
+```{r}
+# Need to turn Duration into a factor
+pregnancy$Duration = factor(pregnancy$Duration)
+
+# Changing Age to an ORDERED (ordinal) factor
+pregnancy$Age <- factor(pregnancy$Age)
+
+table(pregnancy$Age)
+# Recreating test & training data
+trainingData = pregnancy[oddrow,]
+testData = pregnancy[evenrow,]
+
+str(trainingData) # Note that indeed now Age is ordered, because it says "2"<"1"<"3"
+str(testData)
+```
+
+
+```{r}
+# Fit Ordinal Logistic Regression
+library(ordinal) # Loading required library for Ordinal Logistic Regression
+
+ordinalFit = clm(Duration ~ . , data = trainingData)
+summary(ordinalFit)
+```
+
+```{r}
+# Making predictions on Test Data
+probabilitiesOrdinal = predict(ordinalFit, newdata = testData)
+?predict
+head(probabilitiesOrdinal)
+```
+
+Just have to assign category based on highest probabilty and calculate table (confusion matrix)
+
+## Exercise 7.13
+
+```{r}
+# Read in data
+mam = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/Mammography.csv")
+str(mam)
+```
+
+```{r}
+train_indices<-seq(1,nrow(mam),by=2)
+test_indices<-seq(2,nrow(mam),by=2)
+train <-mam[train_indices, ]
+test <-mam[-train_indices, ]
+#Fit nominal logistic regression model
+library(nnet)
+fit_nominal <-multinom(ME ~ PB+HIST, data=train, maxit=1000)
+```
+```{r}
+summary(fit_nominal)
+```
+
+```{r}
+predicted=predict(fit_nominal, type='probs',newdata=test)
+n=nrow(test)
+Y.hat.1 = rep(0,n)
+for(i in 1:nrow(test)) {if(max(predicted[i,])==predicted[i,1]){Y.hat.1[i]=0;}
+else if(max(predicted[i,])==predicted[i,2]) {Y.hat.1[i]=1;}
+else if(max(predicted[i,])==predicted[i,3]) {Y.hat.1[i]=2;}
+}
+Y.hat.1
+```
+
+```{r}
+ctable1 = table(test$ME,Y.hat.1)
+ctable1
+```
+
+```{r}
+correct.rate1=(106+7)/nrow(test)
+correct.rate1
+```
+
+### b)
+
+```{r}
+mam$ME.ordered = ordered(mam$ME, levels=c(0,2,1))
+train_indices<-seq(1,nrow(mam),by=2)
+test_indices<-seq(2,nrow(mam),by=2)
+train <-mam[train_indices, ]
+test <-mam[-train_indices, ]
+
+library(ordinal)
+#fit the ordinal logistic regression model
+fit_ordinal <- clm(ME.ordered ~ PB+HIST, data=train, maxit=1000)
+summary(fit_ordinal)
+
+```
+
+```{r}
+Y.prob.2 = predict(fit_ordinal, newdata=test[,3:4])$fit;
+# now get the predicted class using the maximum probability rule
+n=nrow(test)
+Y.hat.1 = rep(0,n)
+for(i in 1:nrow(test)) {if(max(Y.prob.2[i,])==Y.prob.2[i,1]){Y.hat.1[i]=0;}
+else if(max(Y.prob.2[i,])==Y.prob.2[i,2]) {Y.hat.1[i]=2;}
+else if(max(Y.prob.2[i,])==Y.prob.2[i,3]) {Y.hat.1[i]=1;}
+}
+Y.hat.1
+```
+
+```{r}
+ctable1 = table(test$ME.ordered,Y.hat.1)
+ctable1
+```
+
+```{r}
+correct.rate1=sum(107+2)/nrow(test);
+correct.rate1
+```
+
+## 7.14
+
+```{r}
+# Read in data
+program = read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/program.csv")
+program = program[,-1]
+str(program)
+```
+
+```{r}
+library(nnet)
+fit_nominal <-multinom(prog ~., data=program, maxit=1000)
+summary(fit_nominal)
+```
+
+```{r}
+library(MASS)
+fit_nominal <- stepAIC(fit_nominal)
+```
+
+```{r}
+summary(fit_nominal)
+```
+
+```{r}
+predict_nominal = predict(fit_nominal, type = 'probs', newdata = data.frame(gender = "male", ses = "high", schtyp = "private", math = 52, science = 53, read = 50, writing = 54))
+predict_nominal
+```
+
+### b) 
+
+```{r}
+fit_ordinal <- clm(prog ~., data=program, maxit=1000)
+fit_ordinal <- stepAIC(fit_ordinal)
+summary(fit_ordinal)
+```
+
+```{r}
+predict_ordinal = predict(fit_ordinal, newdata = data.frame(gender = "male", ses = "high", schtyp = "private", math = 52, science = 53, read = 50, write = 54))
+predict_ordinal
+```
+
+
+
+
+
+
+
+
+

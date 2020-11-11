@@ -1,0 +1,160 @@
+---
+title: "HOmework 9"
+author: "Kristiyan Dimitrov"
+date: "12/8/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exercise 10.8
+
+```{r}
+library(survival)
+str(aml)
+```
+
+
+```{r}
+#Import data
+cellphone <- read.csv("cellphone data.csv")
+cellphone <- na.omit(cellphone) # Removing rows with any NAs
+str(cellphone)
+```
+
+```{r}
+# Making KM curves; using the Churn column as censor columns
+cellfit <- survfit(Surv(Months, Churn) ~ Account_Type, data = cellphone)
+summary(cellfit)
+```
+
+```{r}
+plot(cellfit, col = 1:2, xlab = "Months", ylab = "Proportion not Churned") 
+legend("topright", paste(" ",c("Business","Individual")), col=1:2,lty=c(1 ,2))
+```
+
+Indeed, we can see a significant drop off after 24 months. This is because previously there used to be a contractual restriction of 24 months.
+We note that the Business clients appear to last longer than the Individual ones
+
+### b) - Performing the Log-Rank Test to check null Hypothesis of S_1(t) = S_2(t) i.e. no difference in survival times b/w individual and business customers
+
+```{r}
+survdiff(Surv(Months, Churn) ~ Account_Type, data = cellphone)
+```
+
+We see that the two curves pass the Chi-squared test with a highly significant p-value
+
+## Exercise 10.9
+
+```{r}
+cellCoxPHfit <- coxph(Surv(Months, Churn) ~ Account_Type, data = cellphone)
+summary(cellCoxPHfit)
+```
+
+We see that individual accounts have a 1.66 times higher hazard/churn rate than business accounts
+
+```{r}
+# Fitting second Cox Proportional HAzards model, this time including Line_Count as a predictor variable as well
+cellCoxPHfit2 <- coxph(Surv(Months, Churn) ~ Account_Type + Line_Count, data = cellphone)
+summary(cellCoxPHfit2)
+```
+
+We now see that Account_Type is not a significant variable.
+This means that it doesn't matter whether the customer is individual or business, but rather how many lines they have.
+That's why in the first model it only looked like account type mattered.
+In reality, it was just correlation, not causation.
+The true causation is probably caused by the number of lines.
+
+## Exercise 10.10
+
+```{r}
+#Import data
+rewards <- read.csv("AMRP.csv")
+
+# Check for NA's by column
+for (i in seq(1, ncol(rewards))){
+  print(colnames(rewards)[i])
+  print(sum(is.na(rewards[,i])))
+}
+```
+
+
+```{r}
+rewards <- na.omit(rewards) # Removing rows with any NAs
+str(rewards)
+sum(is.na(rewards)) # Checking that the NA's have been removed
+```
+
+Let's plot some KM curves
+
+```{r}
+rewardsKMfit <- survfit(Surv(t, censored) ~ prevcat, data = rewards)
+plot(rewardsKMfit, col = 1:4, xlab = "Days", ylab = "Proportion not redeemed") 
+#legend("topright", paste(" ",c("Business","Individual")), col=1:2,lty=c(1 ,2))
+```
+
+It's difficult to say if some categories are different than others. We could do a log-rank test to find out, but I will go ahead and fir a CoxPH model
+
+```{r}
+rewardsCoxPHfit <- coxph(Surv(t, censored) ~ ., data = rewards)
+summary(rewardsCoxPHfit)
+```
+
+Will now fit the model without prevcatentertain, prebank, preretail, preother.
+Then I will gradually remove additional non-significant variables to leave the final model
+
+```{r}
+rewardsCoxPHfit2 <- coxph(Surv(t, censored) ~ totredeem + prevcat + prefood + prebonus + baselen, data = rewards)
+summary(rewardsCoxPHfit2)
+```
+
+Don't know how to drop the prevcatentertain category from the factor variable. But it's low significant probably means there isn't any significant difference between the survival curves of the Entertain category and the gift certificate categoty.
+The rest of the variables are significant at alpha = 95%
+
+## Exercise 10.11
+
+```{r}
+#Import data
+recid <- read.csv("recid.csv")
+recid <- recid[,-1]
+str(recid)
+```
+
+Tried to reshape data to long format below, but didn't manage to, dropping this and going to study for rest of final :_)
+
+```{r}
+library(reshape2)
+recidMelt <- m
+melt.data.frame(data = recid, )
+# Try to fit Cox PH model with all variables
+fitAll <- coxph(Surv(Week, Arrest) ~ . , data=recid)
+summary(fitAll)
+melt(data = recid, id.vars = c("Week", "Arrest", "Aid", "Age", "Race", "Work", "Married", "Parole", "Prior", "Education"), measure.vars = c("emp1",	"emp2",	"emp3",	"emp4",	"emp5",	"emp6",	"emp7",	"emp8",	"emp9",	"emp10",	"emp11",	"emp12",	"emp13",	"emp14",	"emp15",	"emp16",	"emp17",	"emp18",	"emp19",	"emp20",	"emp21",	"emp22",	"emp23",	"emp24",	"emp25",	"emp26",	"emp27",	"emp28",	"emp29",	"emp30",	"emp31",	"emp32",	"emp33",	"emp34",	"emp35",	"emp36",	"emp37",	"emp38",	"emp39",	"emp40",	"emp41",	"emp42",	"emp43",	"emp44",	"emp45",	"emp46",	"emp47",	"emp48",	"emp49",	"emp50",	"emp51",	"emp52") ,variable.names = c("start","stop"))
+
+str(recid)
+```
+
+```{r}
+#Melting data
+meltedData <- melt(data = recid, id.vars = c("Week", "Arrest", "Aid", "Age", "Race", "Work", "Married", "Parole", "Prior", "Education"), measure.vars = c("emp1",	"emp2",	"emp3",	"emp4",	"emp5",	"emp6",	"emp7",	"emp8",	"emp9",	"emp10",	"emp11",	"emp12",	"emp13",	"emp14",	"emp15",	"emp16",	"emp17",	"emp18",	"emp19",	"emp20",	"emp21",	"emp22",	"emp23",	"emp24",	"emp25",	"emp26",	"emp27",	"emp28",	"emp29",	"emp30",	"emp31",	"emp32",	"emp33",	"emp34",	"emp35",	"emp36",	"emp37",	"emp38",	"emp39",	"emp40",	"emp41",	"emp42",	"emp43",	"emp44",	"emp45",	"emp46",	"emp47",	"emp48",	"emp49",	"emp50",	"emp51",	"emp52") ,variable.names = c("start","stop"))
+
+head(meltedData,100)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

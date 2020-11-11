@@ -1,0 +1,108 @@
+---
+title: "Problem 3"
+author: "Kristyan Dimitrov, Srividya Ganapathi, Shreyashi Ganguly, Greesham Simon, Joe Zhang"
+date: "18/02/2020"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 3
+
+### Part (a): Transition Probability Matrix
+
+```{r 5a, message=FALSE, warning=FALSE}
+news <- read.csv("npmarkov.csv")
+news
+colnames(news) <- c("ProsL","ProsH","TrialL","TrialH","FullL","FullH","ChurnL","ChurnH","PageView")
+
+#Transition Probability Matrix
+P <- matrix(0, nrow=8, ncol=8)
+P <- news[-c(9)]/rowSums(news[-c(9)])
+print("The transition probability matrix is as follows:")
+print(P)
+```
+
+
+### Part (b): Value Vector
+
+```{r 5b, message=FALSE, warning=FALSE}
+sub = c(0,0,1,1,10,10,0,0)
+page = news$PageView
+v <- matrix(0, nrow=8, ncol=1)
+for (i in 1:8) {
+    v[i,1] <- sub[i] + 0.002*page[i]
+}
+print("The value vector is as follows:")
+print(v)
+```
+
+### Part (c): Customer Equity (lifetime)
+```{r 5c, message=FALSE, warning=FALSE}
+n <- c(5000,5000,1000,1000,3000,3000,4000,4000)
+CE <- t(n) %*% solve(diag(rep(1,8)) - P/1.01) %*% v
+sprintf("Customer Equity = $%f",CE)
+```
+
+
+### Part (d): Customer Equity upon cutting advertisements in half
+```{r 5d, message=FALSE, warning=FALSE}
+v_new <- matrix(0, nrow=8, ncol=1)
+for (i in 1:8) {
+    v_new[i,1] <- sub[i] + 0.001*page[i]
+}
+
+CE_new <- t(n) %*% solve(diag(rep(1,8)) - P/1.01) %*% v_new
+sprintf("Customer Equity on cutting advertisements in half = $%f",CE_new)
+sprintf("CE reduces by = $%f",abs(CE_new - CE))
+```
+
+### Part (e): Projecting cash flows for next 36 months
+```{r 5e, message=FALSE, warning=FALSE}
+CE_36 <- 0
+n_t <- n
+for (t in 1:36) {
+    n_t <- n_t %*% as.matrix(P)
+    CE_t <- n_t %*% v_new/(1.01)**t
+    CE_36 <- CE_36 + CE_t
+}
+sprintf("Customer Equity till 36 months = $%f",CE_36)
+```
+
+### Part (f): Change in CE upon acquiring new prospects
+```{r 5f, message=FALSE, warning=FALSE}
+a <- c(100,100,0,0,0,0,0,0)
+CE_36_a <- 0
+n_t <- n
+for (t in 1:36) {
+    n_t <- n_t %*% as.matrix(P) + a
+    CE_t <- n_t %*% v_new/(1.01)**t
+    CE_36_a <- CE_36_a + CE_t
+}
+sprintf("Customer Equity till 36 months = $%f",CE_36_a)
+sprintf("Expected number of customers (trial + full) = %f",sum(n_t[c(3,4,5,6)]))
+sprintf("Increase in CE = $%f", CE_36_a - CE_36)
+```
+
+### Part (g): Increased retention upon reducing advertisements
+```{r 5g}
+P_new <- P
+P_new[1:2,1:2] <- P[1:2,1:2]-0.01
+P_new[3:6,7:8] <- P[3:6,7:8]-0.01
+P_new[1:2,3:4] <- P[1:2,3:4]+0.01
+P_new[3:6,5:6] <- P[3:6,5:6]+0.01
+CE_36_r <- 0
+n_t <- n
+for (t in 1:36) {
+    n_t <- n_t %*% as.matrix(P_new) + a
+    CE_t <- n_t %*% v_new/(1.01)**t
+    CE_36_r <- CE_36_r + CE_t
+}
+sprintf("Customer Equity till 36 months = %f",CE_36_r)
+sprintf("Expected number of customers (trial + full) = %f",sum(n_t[c(3,4,5,6)]))
+sprintf("Increase in CE = %f", CE_36_r - CE_36_a)
+```

@@ -1,0 +1,295 @@
+---
+title: "Predictive Analytics 1 - Homework 3"
+author: "Parth Patel, Kristian Nikolov, Jieda Li, Kristiyan Dimitrov"
+date: "10/17/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```
+
+## Exercise 3.13
+### a)
+```{r}
+# First we need to import our data
+data=read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/Research.csv",stringsAsFactors = FALSE)
+# Below we transform the Research column to numeric by removing the $ sign and the commas
+data$Research <- as.numeric(gsub(',','',substr(data$Research, start=2, stop=nchar(data$Research)-1), fixed=TRUE))
+# Finally, we don't really need the PhD Faculty column
+data <- data[-4]
+str(data)
+```
+```{r}
+# Matrix Scatterplot
+plot(data[2:4])
+```
+
+There definitely appears to be a linear relationship b/w Research and # of Faculty / PhD Students.
+
+```{r}
+# This produces the Correlation Matrix of the 3 variables
+cor(data[2:4])
+```
+
+### b)
+```{r}
+# Fitting a linear model 
+lmfit = lm(data$Research ~ data$Faculty + data$PhD , data = data)
+summary(lmfit)
+```
+
+We note that Faculty has a t-statistic of 0.554, which means it is not significant.
+At the same time, PhD has a t-statistic 2.675, which makes it significant.
+This anomalous result is due to the causal dependence b/w Faculty & PhDs.
+i.e. our predictor variables are not independent of each other.
+i.e. there is some level of multicolinearity.
+
+```{r}
+# install.packages("ppcor") # This package allows us to calculate Partial Correlation Coefficients
+library("ppcor")
+
+pcor(data[2:4], method = "pearson")$estimate # The Partial Correlation Matrix
+```
+
+```{r}
+pcor(data[2:4], method = "pearson")$statistic  # The t-statistics
+```
+We note that the t-statistic for Research w.r.t PhD is 2.6746, which is approx. what we got from the lmfit (2.675)
+Similarly, here we get a t-statistic for Research w.r.t to Faculty of 0.5539 while from the lmfit we got (.554)
+i.e. They are the same!
+
+## Exercise 3.15
+```{r}
+# First we import our data
+data <- read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/Sales Data.csv",stringsAsFactors = FALSE)
+str(data)
+```
+### a)
+```{r}
+# The correlation matrix R b/w x1 & x2
+corr_mat=cor(data[1:2])
+print(corr_mat)
+
+```
+
+```{r}
+print(cor(data[-2])[2]) # Correlation between y & x1
+print(cor(data[-1])[2]) # Correlation between y & x2
+r=c(cor(data[-2])[2],cor(data[-1])[2]) # Vector r with the correlation b/w y and x1, x2
+print(c(cor(data[-2])[2],cor(data[-1])[2]))
+```
+
+```{r}
+# Manual Calculation of partial correlation coefficient of y w.r.t. x2 given x1
+par_corr_yx2_given_x1 = (.9040219-.9708553*.9132577) / sqrt((1-(.9708553)^2)*(1-(.9132577)^2))
+print(par_corr_yx2_given_x1)
+# Confirming the above result with the pcor function
+pcor(data)$estimate[3,2]
+```
+
+```{r}
+# Manual Calculation of partial correlation coefficient of y w.r.t. x1 given x2
+par_corr_yx1_given_x2 = (.9708553-.9040219*.9132577) / sqrt((1-(.9040219)^2)*(1-(.9132577)^2))
+print(par_corr_yx1_given_x2)
+# Confirming the above result with the pcor function
+pcor(data)$estimate[3,1]
+```
+
+### b)
+
+```{r}
+# First we need to find the inverse of the R matirx
+inv_corr_mat = solve(corr_mat)
+print(inv_corr_mat)
+```
+```{r}
+# Now we find the standardized regression coefficients by multiplying R^(-1) %*% r
+print(inv_corr_mat %*% r)
+```
+
+In terms of "How do they compare with the partial correlation coefficients?" We see they are proportianally similar to the partial correlation coefficients i.e. we see that the beta_hat_star for x1 is .8752 and the partial corr. coeff. of y w.r.t x1 given x2 is 0.8340516 i.e. y appears to depend much more on x1 than on x2.
+
+### c)
+
+```{r}
+sd_y = sd(data$y) # standard deviation of y
+sd_x1 = sd(data$x1) # standard deviation of x1
+sd_x2 = sd(data$x2) # standard deviation of x2
+lmfit = lm(y ~ x1 + x2, data)
+beta_1 = lmfit$coefficients[2] # This is beta_1: the coefficient of x_1 from the regression
+beta_2 = lmfit$coefficients[3] # This is beta_2: the coefficient of x_2 from the regression
+print(beta_1)
+print(beta_2)
+```
+```{r}
+# Calculate the beta_hat_stars by scaling:
+beta_1_star = (beta_1 / sd_y) * sd_x1
+beta_2_star = (beta_2 / sd_y) * sd_x2
+print(beta_1_star)
+print(beta_2_star)
+
+# We double verify we got the same as before
+print(inv_corr_mat %*% r)
+```
+
+Indeed, we got the same results!
+
+### d) Which predictors are better: (beta_1, beta_2) or (beta_1_star, beta_2_star)?
+The two sets of parameters ((beta_hat_1, beta_hat_2) & (beta_hat_1_star, beta_hat_2_star) are equivalent in terms of prediction
+i.e. we could use either set for our final model.
+However, the standardized (star) ones allow us to compare between x1 and x2 's influence on y.
+i.e. the standardized parameters are unitless and we can therefore compare them.
+
+## Exercise 3.16
+### a)
+```{r}
+# We begin by importing our data
+data <- read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/salaries.csv",stringsAsFactors = FALSE)
+str(data)
+```
+```{r, echo = FALSE, include=FALSE}
+library(tidyverse) # Loading tidyverse
+```
+
+```{r}
+# Adding the log_10(Salary) variable as response
+data <- data %>% 
+  mutate(log_Salary = log10(data$Salary))
+
+str(data)
+```
+
+```{r}
+data$Gender <- relevel(factor(data$Gender), "Male") # Choosing Male as our reference category for Gender
+data$Dept <- relevel(factor(data$Dept), "Purchase") # Choosing Purchase as our reference category for Dept
+lmfit = lm (log_Salary ~ YrsEm + PriorYr + Education + Gender + Dept + Super , data = data)
+summary(lmfit)
+```
+
+Indeed our coefficients are the same as those specified in the book!
+
+### b)
+```{r}
+data$Gender <- relevel(factor(data$Gender), "Female") # Choosing Female as our reference category for Gender
+data$Dept <- relevel(factor(data$Dept), "Sales") # Choosing Salesa s our reference category for Dept
+lmfit2 = lm (log_Salary ~ YrsEm + PriorYr + Education + Gender + Dept + Super , data = data)
+summary(lmfit2)
+```
+
+We notice the coefficient for Female in the first lmfit (.02306) is the same as the coefficient for Male in the second lmfit, but with a negative sign! (-.02306). The same holds for the coefficients for the dummy variables of Sales & Purchases (-.09377 & .09377).
+
+The reason for this is we have simply changed the reference point. The marginal impact of being in Sales vs. being in Purchase is, of course, the same as being in Purchase vs. being in Sales.
+
+Also note, for the Advertising & Engineering categories, the coefficients change, which is to be expected. The marginal impact of being in Advertising or Engineering changes when we change the reference from Sales to Purchase or vice-versa.
+
+### c)
+The fact that Engg is non-significant when the reference is Purchase tells us that being in Engg does NOT make a significant marginal contribution to Salary vs being in Purchase. 
+On the other hand, the fact that Engg is highly significant when the reference is Sales, tells us that there IS a significant marginal contribution to Salary when you are in Engg vs. being in Sales
+
+### d)
+```{r}
+lmfit3 = lm (log_Salary ~ YrsEm + Education + Dept , data = data)
+summary(lmfit3)
+```
+We note that:
+1) The adjusted R_squared of our newest model (.8272) is not very different from that of our previous two models (.8338)
+This means that the predictive power of our model has not deteriorated when we removed the insignificant variable
+2) The F-statistic for our latest model is 44.09, while for our first two models it was 29.22
+Therefore, by removing the insignificant variables from our model we have actually improved the significant of our overall model quite a bit!
+
+
+
+## Exercise 4.4
+```{r}
+# As always, we begin by importing our data
+gpa <- read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Datasets/gpa.csv", stringsAsFactors = FALSE)
+str(gpa)
+```
+
+```{r}
+# Fit with linear & quadratic terms of Verbal & Math
+infit = lm(GPA ~ Verbal*Math + I(Verbal^2) + I(Math^2), data = gpa)
+summary(infit)
+```
+
+## a)
+```{r}
+plot(infit, which=2) # Making the Normal Q-Q plot
+```
+The Normal Q-Q plot exhibits a "step-wise" pattern and doesn't follow a straight line., especially at the tail ends.
+Therefore, the normality assumption appears to be violated.
+
+```{r}
+plot(infit, which=1) # Making the Residuals ~ Fitted Values plot
+```
+
+The residuals vs. fitted values plot shows us that the residuals increase with the fitted values in a linear fashion i.e. they are in a cone-shape. A linear relationship b/w fitted values and the standard deviation of the residuals, suggests a squared relationship between fitted values & variation of residuals i.e. fitted values ~ Var(residuals)^2.
+
+Therefore, by the delta method discussed in class, this suggests the log-transformation of GPA as an appropriate variance stabilizing transform.
+## b)
+```{r}
+# Performing the log Transformation
+logfit = lm(log(GPA) ~ Verbal*Math + I(Verbal^2) + I(Math^2), data = gpa)
+summary(logfit)
+```
+```{r}
+plot(logfit, which=2) # Making the Normal Q-Q plot
+```
+The "step pattern" is now definitely mitigated and follows the normal line more closely.
+i.e. the normality assumption is now better satisfied.
+
+```{r}
+plot(logfit, which=1) # Making the Residuals ~ Fitted Values plot
+```
+The homoscedasticity assumption is still under question, especially for the tails, but the plot definitely exhibits an improvement in terms of the stability of the variance of the residuals w.r.t. the fitted values.
+
+## Exercise 4.6
+```{r}
+# We begin by importing our data
+data <- read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/salaries.csv",stringsAsFactors = FALSE)
+# Adding the log_10(Salary) variable as response
+data <- data %>% 
+  mutate(log_Salary = log10(data$Salary))
+
+str(data)
+```
+
+```{r}
+data$Gender <- relevel(factor(data$Gender), "Male") # Choosing Male as our reference category for Gender
+data$Dept <- relevel(factor(data$Dept), "Purchase") # Choosing Purchase as our reference category for Dept
+lmfit = lm (Salary ~ YrsEm + Education + Dept, data = data) # Using Salary as variable
+summary(lmfit)
+```
+
+```{r}
+logfit = lm (log_Salary ~ YrsEm + Education + Dept, data = data) # Using log(Salary) as response variable
+summary(logfit)
+```
+
+## a)
+```{r}
+plot(lmfit, which=2) # Making the Normal Q-Q plot
+```
+
+```{r}
+plot(logfit, which=2) # Making the Normal Q-Q plot
+```
+We note a slight improvement in terms of how the theoretical quantiles follow the normal line in the middle of the graph
+
+## b)
+```{r}
+plot(lmfit, which=1) # Making the Residuals vs. Fitted Values plot
+```
+
+```{r}
+plot(logfit, which=1) # Making the Residuals vs. Fitted Values plot
+```
+
+The residuals definitely appear to be following more of a parallel band.
+Therefore, our homoscedasticity assumption is better satisfied under a log-transformed response variable.
+
+

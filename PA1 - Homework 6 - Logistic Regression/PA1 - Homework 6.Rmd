@@ -1,0 +1,113 @@
+---
+title: "PA1 - Homework 6"
+author: "Kristiyan Dimitrov"
+date: "11/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exercise 7.7
+### a)
+
+Simpson's paradox occurs because the proportions we are looking at don't come from the same sample sizes. For example, 80% admission can mean 8 out of 10 or 80 out of 100. One is more signiifcant than the other. It is important to look at the overall proportions when drawing conclusions and also keeping the context of the data in mind.
+
+In our situation, for example, many more men applied to department A (825) vs just 108 women.
+
+### b) 
+```{r}
+# Importing data
+admission = read.csv("UCBAdmissions.csv")
+str(admission)
+```
+
+```{r}
+# From the data
+odds_men = 1198 / (2691 - 1198)
+odds_women = 557 / (1835- 557)
+log_odds_ratio = log(odds_men/odds_women) # Taking women as reference category i.e. women = 0, men = 1 as suggested in book
+log_odds_ratio
+```
+
+```{r}
+# Fitting a Simple Logistic Regression model to the data
+logistic_fit = glm(Admit ~ Gender, family=binomial, data = admission)
+summary(logistic_fit)
+```
+
+```{r}
+# Verifying the log_odds_ration we calculated is the same as the one produced from the logistic regression
+round(logistic_fit$coefficients["Gender"], 5) == round(log_odds_ratio, 5)
+```
+
+### c) 
+
+```{r}
+# Fitting a Logistic Regression model with Gender & Department to the data
+logistic_fit_2 = glm(Admit ~ Gender + Dept.A  + Dept.B  + Dept.C  + Dept.D  + Dept.E  + Dept.F, family=binomial, data = admission)
+summary(logistic_fit_2)
+```
+
+We see that all the parameters for Dept. appear to be significant, while Gender is not significant. This means that Department was a "lurking variable" i.e. we could have mistakenly drawn conclusions about Gender, when in fact it's not a significant predictor.
+
+## Exercise 7.8
+```{r}
+# Importing data
+radiation = read.csv("Radiation.csv")
+radiation <- radiation[1:24,] # For some reason we have repeating data; reducing to intended 24 data entries
+str(radiation)
+```
+
+
+### Part a
+```{r}
+# Fitting a Simple Binary Logistic Regression model to the data
+logistic_fit = glm(Success ~ Days, family=binomial, data = radiation)
+summary(logistic_fit)
+```
+
+### b)
+```{r}
+exp(5*(-.08648)) # Estimate
+exp(5*(-.08648+1.96*0.04322 )) # Upper limit of CI
+exp(5*(-.08648-1.96*0.04322 )) # Lower limit of CI
+
+```
+
+### c)
+```{r}
+log_odds_vect = logistic_fit$fitted.values
+print(log_odds_vect)
+
+```
+
+## Exercise 7.10
+
+```{r}
+library(caret)
+# Data set 1
+CCR1 = (8100+900) / (10000) # Sum of Diagonal entries divided by total sum of all entries
+sensitivity1 = 900/1000 # 1 - False Negative rate
+specificity1 = 8100/9000 # 1 - False Positive rate 
+precision1 = 900 / (900 + 900)
+recall1 = sensitivity1
+F1_1 = 2*precision1*recall1 / (precision1 + recall1)
+
+# Data set 2
+CCR2 = 9000 / 10000
+sensitivity2 =90/100
+specificity2 = 8910/9900
+precision2 = 90 / (990 +90)
+recall2 = sensitivity2
+F1_2 = 2*precision2*recall2 / (precision2 + recall2)
+```
+
+Inspecting the values we see that:
+While CCR, Sensitivity/Recall, and Specificity are all equal between the two models, we see that precision is higher for the first one. This in turn leads to a higher F1 score for the first model, therefore it appears to be the better classifier.
+
+We have to note that the more the data is unbalanced( as is the case with set 2) the worse our classifier will perform
+
+
+

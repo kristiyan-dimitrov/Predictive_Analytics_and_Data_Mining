@@ -1,0 +1,289 @@
+---
+title: 'MSiA 400: ESD - Homework 1'
+author: "Kristiyan Dimitrov"
+date: "10/31/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+### a) Creating the Traffic Matrix
+
+```{r}
+# Importing data
+webtraffic = as.matrix(read.table("webtraffic.txt", header=T))
+webtraffic[0:12,0:12]
+```
+
+```{r}
+# Forming the Traffic matrix
+traffic_vector = colSums(webtraffic)
+Traffic = matrix(traffic_vector, nrow = 9, ncol = 9, byrow = TRUE)
+Traffic[9,1] = 1000
+Traffic
+```
+
+### b) Drawing the directed graph
+
+```{r}
+# Installing necessary package
+# install.packages("igraph")
+library(igraph)
+```
+
+```{r}
+# Creating directed graph
+igraph = graph_from_adjacency_matrix(Traffic, mode = 'directed', weighted = TRUE)
+plot(igraph)
+```
+
+By inspecting the graph we see that the Markov Chain is irreducible, because from every state we can eventually get to every other state.
+
+We see that all states in the Markov chain are aperiodic and positive recurrent (i.e. we can expect to visit each state after a number of steps < than infinity.) Therefore, the Markov chain is also Ergodic
+
+The above two characteristics also ensure that there will be a unique stationary state/distribution!
+
+### c)
+```{r}
+# Calculating row sums
+row_sums = rowSums(Traffic)
+row_sums
+```
+
+```{r}
+# Calculating the 1-step transition probability matrix
+
+P = matrix( rep( 0, len=81), nrow = 9) # Initializing matrix with all 0's
+range = seq(1,9) # setting up needed iterator
+
+# Defining each i,j entry of P as the i,j-th entry of Traffic divided by the sum of the entries in the j-th row
+for (i in range)
+  {
+  for(j in range)
+    { 
+      P[i,j] = Traffic[i,j]/row_sums[i]
+    }
+}
+
+# Displaying P
+P
+
+```
+
+### d)
+
+```{r}
+# install.packages("expm")
+library(expm) # Calling required library to do matrix powers
+initial_state = c(1, rep(0,8)) # Initial state at Page 1
+
+prob5 = initial_state %*% (P %^% 5)
+prob5[1,5] # This is the probability of a person starting at Page 1 and being at Page 5 in 5 clicks (steps)
+```
+
+### e) - Finding the Steady State (Stationary State)
+
+```{r}
+Q=t(P)-diag(9) # Calculating P transpose - indentity matrix
+Q[9,]=rep(1,9) # Replacing the last row with all 1's
+rhs=c(rep(0,8),1) # Making Q * Pi equal to (0 0 0 0 ... 0 0 1)
+Pi=solve(Q,rhs) #solves Q %*% Pi = rhs for Pi
+
+Pi # This is the steady state matrix of our Markov Chain
+
+```
+
+### f)
+
+```{r}
+page_times <- c(.1, 2, 3, 5, 5, 3, 3, 2)
+B = P[1:8,1:8] # The submatrix obtained from P after the j-th row is removed; 
+# the j-th row is the state we are interested in finding the mean time for
+# That is when they leave the website
+
+Q=diag(8)-B # Calculate Q = (I - B)
+rhs=page_times # Set it equal to a vector of all 1's
+m=solve(Q,rhs) # Solve matrix equation; m shows us the average number of steps we will need to wait to get from m[i] state to state j.
+m[1] # Avg. time on website
+```
+
+Therefore, the avg. website visitor will spend on average 14.5 seconds.
+
+## Problem 2
+### a) Determining number of samples needed
+
+```{r}
+var_p_x = '1/lambda^2'
+tolerance = .001
+beta = 1 - .99
+n = 1 / (beta * tolerance^2)
+
+print(paste("The minimum number of samples we need is ", round(n) , "*", var_p_x))
+```
+
+### b)
+#### lambda = 4
+```{r}
+lambda_4 = 4
+# Then the required number of samples is:
+n_4 = n / (lambda_4^2)
+n_4
+```
+
+```{r}
+set.seed(1000)
+x_4 = runif(n_4,0,1)
+y_4 = -log(x_4)/lambda_4
+estimates_4 = sin(y_4)/lambda_4
+avg_4 = mean(estimates_4) # The average of all the approximations
+avg_4
+```
+
+```{r}
+# Exact solution
+exact_solution_4 = 1 / (1 + lambda_4^2)
+exact_solution_4
+```
+
+```{r}
+# Testing if we are within the tolerance
+abs(avg_4-exact_solution_4) < tolerance
+```
+
+--------------------
+
+#### lambda = 2
+```{r}
+lambda_2 = 2
+# Then the required number of samples is:
+n_2 = n / (lambda_2^2)
+n_2
+```
+```{r}
+x_2 = runif(n_2,0,1)
+y_2 = -log(x_2)/lambda_2
+estimates_2 = sin(y_2)/lambda_2
+avg_2 = mean(estimates_2) # The average of all the approximations
+avg_2
+```
+
+```{r}
+# Exact solution
+exact_solution_2 = 1 / (1 + lambda_2^2)
+exact_solution_2
+```
+
+```{r}
+# Testing if we are within the tolerance
+abs(avg_2-exact_solution_2) < tolerance
+```
+
+#### lambda = 1
+```{r}
+lambda_1 = 1
+# Then the required number of samples is:
+n_1 = n / (lambda_1^2)
+n_1
+```
+
+```{r}
+x_1 = runif(n_1,0,1)
+y_1 = -log(x_1)/lambda_1
+estimates_1 = sin(y_1)/lambda_1
+avg_1 = mean(estimates_1) # The average of all the approximations
+avg_1
+```
+
+```{r}
+# Exact solution
+exact_solution_1 = 1 / (1 + lambda_1^2)
+exact_solution_1
+```
+
+```{r}
+# Testing if we are within the tolerance
+abs(avg_1-exact_solution_1) < tolerance
+```
+
+For all three lambda values we see we are within the tolerance level at 99% confidence.
+
+## Problem 3
+### a)
+
+I will choose the Metropolis-Hastings algorithm, because the exponential distribution is not symmetric (and therefore the Metropolis algorithm won't work).
+We are not sampling from joint or conditional therefore we can't use Gibbs.
+
+#### b)
+
+```{r}
+# Implementing Metropolis Hastings sampling algorithm
+set.seed(500)
+range_15000 = seq(2,15000) # Useful to have iterator from 2 to 15000
+estimates = rep(0, 15000) # Initializing estimates
+estimates[1] = 1 # Setting initial estimate
+for (i in range_15000)
+{
+  y = runif(1, 0, 1)
+  x_current = estimates[i-1]
+  x_new = -log(y)/x_current # In essence, with these 3 lines we are sampling from q(), the exponential distribution
+  
+  # Below we calculate the acceptance ratio alpha
+  f_x_new = x_new * exp(-x_new/2)
+  f_x_current = x_current * exp(-x_current/2)
+  
+  # Note the q function numerator & denominator below
+  # q_num = x_new * exp(-x_current * x_new)
+  # q_den = x_current * exp(-x_current * x_new)
+  
+  # We can see the ratio of the two will be x_new / x_current
+  # Therefore:
+  
+  alpha = f_x_new * x_new / (f_x_current * x_current)
+  u = runif(1, 0, 1)
+  
+  if ( u <= alpha)
+  {
+    estimates[i] = x_new
+    
+  } else {
+    
+    estimates[i] = x_current
+    
+  }
+}
+
+```
+
+```{r}
+length(estimates) # We have 15,000 samples
+burn_estimates = estimates[5001:15000] # Ignore first 5,000 samples
+length(burn_estimates) # We have 10,000 samples left
+keep_samples = c(rep(0,100)) # Initializing samples to keep
+range100 = seq(1,100)
+# Taking ever 100th element from our 'post-burn' samples
+for ( i in range100)
+{
+  keep_samples[i] = burn_estimates[i*100]
+}
+
+keep_samples
+```
+
+### c)
+
+```{r}
+hist(keep_samples)
+plot(range100, keep_samples)
+```
+
+```{r}
+acf(keep_samples)
+```
+
+We confirm by running the autocorrelation test. We see that our samples are not autocorrelated.
+Maybe a higher burn-in rate would be adequate, given the first values.

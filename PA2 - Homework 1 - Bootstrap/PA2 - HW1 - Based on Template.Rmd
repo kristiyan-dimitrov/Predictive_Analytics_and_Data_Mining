@@ -1,0 +1,511 @@
+---
+title: "PA2 - HW1"
+author: "Kristiyan Dimitrov"
+date: "Jan 25, 2020"
+output:
+  pdf_document:
+    fig_caption: yes
+    fig_height: 4.5
+    fig_width: 6
+    highlight: tango
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment="  ")
+```
+
+```{r common}
+# define functions used globally which are not dependent on any question specifics
+# instead of reloading them each time
+# you can also use this space to load R packages
+# or custom scripts sourced from a R file
+# for example, I have included the CV_ind function
+
+CVInd <- function(n,K) { 
+  # n is sample size; K is number of parts; 
+  # returns K-length list of indices for each part
+  m<-floor(n/K) #approximate size of each part
+  r<-n-m*K
+  I<-sample(n,n) #random reordering of the indices
+  Ind<-list() #will be list of indices for all K parts
+  length(Ind)<-K
+  for (k in 1:K) {
+    if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+    else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+    Ind[[k]] <- I[kpart] #indices for kth part of data
+  }
+  Ind
+}
+```
+
+
+
+## Problem 2
+
+```{r}
+########### QUESTION 2 begins here ###################
+enzyme = read.csv('HW1_data.csv', sep=',') # Read in data
+enzyme = enzyme[1:2] # Remove empty columns
+str(enzyme)
+```
+
+### a)
+
+```{r}
+# First create transformed variables
+print("Creating inverse predictor variables")
+enzyme['inverse_y'] = 1/enzyme$y
+enzyme['inverse_x'] = 1/enzyme$x
+head(enzyme)
+```
+
+```{r}
+# Now we fit a linear model
+print("Fitting Linear Model")
+fit = lm(inverse_y ~ inverse_x, data = enzyme)
+summary(fit)
+```
+
+
+```{r fig.width=5,fig.height=3}
+plot(enzyme[3:4])
+```
+
+```{r}
+beta0 = fit$coefficients[[1]]
+beta1 = fit$coefficients[[2]]
+print("These are the beta values from linear regression")
+beta0; beta1
+# Initial guesses for gamma parameters
+gamma0 = 1/beta0
+gamma1 = beta1/beta0
+gammaStart = c(gamma0, gamma1)
+print("These are our initial guesses for the gamma parameters based on them")
+gammaStart
+```
+
+### b)
+### Using nlm()
+```{r}
+y = enzyme[1]
+x = enzyme[2]
+```
+
+```{r}
+# Defining our parametric model as a function, which returns SSE
+print("Encoding non-linear model as function")
+model <- function(gamma){
+  yhat = gamma[1]*x / (gamma[2]+x)
+  sum((y-yhat)^2) # Return SSE
+}
+model
+```
+
+```{r}
+print("Applying nlm() to model")
+optimizer = nlm(model, p = gammaStart, hessian = TRUE)
+optimizer
+```
+
+```{r}
+# These are the estimates for the Gamma parameters, which give the lowest SSE i.e. these are the MLE estimates
+print('These are the estimates for the Gamma parameters, which give the lowest SSE')
+print('i.e. these are the MLE estimates')
+optimizer$estimate
+```
+
+### Using nls() 
+
+```{r}
+enzyme = read.csv('HW1_data.csv', sep=',') # Read in data
+enzyme = enzyme[1:2] # Remove empty columns
+x1<-enzyme$x;y<-enzyme$y
+
+# Using nls() to compute best gamma parameters, which minimize SSE
+print('Using nls() to compute best gamma parameters, which minimize SSE')
+fn2 <- function(x1,p) {p[1]*x1 / (p[2]+x1)}
+out2<-nls(y~fn2(x1,p),start=list(p=gammaStart),trace=TRUE)
+summary(out2)
+```
+
+```{r}
+print('These are the estimates for the gamma parameters')
+out2$m$getPars()
+```
+
+## Problem 3 - Deriving CI for parameters Analytically
+### a) Fisher Matrix & Covariance Matrix
+
+```{r}
+########### QUESTION 3 begins here ###################
+# To get the Information matrix, we need to first find the MSE
+print('To get the Information matrix, we need to first find the MSE')
+MSE = optimizer$minimum/(length(y)-length(optimizer$estimate)) # SSE / df = SSE / (n - p)
+MSE
+```
+
+```{r}
+# We also need the Hessian
+Hessian = optimizer$hessian # This is the Hessian
+print('We also need the Hessian')
+Hessian
+```
+
+```{r}
+# Below we find the observer Information matrix
+InfoMatrix = Hessian/2/MSE
+print('Then the Information Matrix is Hessian/2/MSE')
+InfoMatrix
+```
+
+```{r}
+# The covariance matrix for the gamma parameters is the inverse of the information matrix
+CovGamma = solve(InfoMatrix)
+print('The covariance matrix for the gamma parameters is the inverse of the information matrix')
+CovGamma
+```
+
+```{r}
+# The standard errors of the parameters are the sqrt() of the diagonal entries in the covariance matrix
+SE = sqrt(diag(CovGamma))
+print('The standard errors of the parameters are the sqrt() of the diagonal entries in the covariance matrix')
+SE
+```
+
+### b)
+
+```{r}
+print('Covariance matrix based on nls() output')
+vcov(out2) # Covariance matrix based on nls() output
+```
+
+```{r}
+print('The SE for the parameters')
+sqrt(diag(vcov(out2))) # The SE for the parameters
+```
+
+We see that the above results are pretty close to the SE results obtained via nlm()
+
+### c) - Calculating confidence intervals
+
+```{r}
+z = 1.96
+# Estimates for gamma0
+L.gamma0 = optimizer$estimate[1] - z * SE[1]
+U.gamma0 = optimizer$estimate[1] + z * SE[1]
+# Estimates for gamma1
+L.gamma1 = optimizer$estimate[2] - z * SE[2]
+U.gamma1 = optimizer$estimate[2] + z * SE[2]
+# These are the confidence intervals for the two variables
+print('These are the confidence intervals for the two variables')
+c(L.gamma0, U.gamma0)
+c(L.gamma1, U.gamma1)
+```
+
+```{r}
+print('CI based on nls() output')
+confint.default(out2) # CI based on nls() output
+```
+
+We see that the above nls() results for the gamma CI closely match the results based on nlm()
+
+## Problem 4 - Using Bootstrapping to construct CIs numerically
+
+```{r}
+########### QUESTION 4 begins here ###################
+# install.packages('boot')
+set.seed(32)
+library(boot)
+enzyme = read.csv('HW1_data.csv', sep=',') # Read in data
+enzyme = enzyme[1:2] # Remove empty columns
+# First we define the function, which produces the statistics we are interested in
+# In this case estimates for the gamma parameters
+enzymeFit<-function(Z,i,gammaInitial) {
+   Zboot<-Z[i,]
+   x<-Zboot[[2]];y<-Zboot[[1]]
+   model <- function(gamma){
+      yhat = gamma[1]*x / (gamma[2]+x)
+      sum((y-yhat)^2) # Return SSE
+      }
+   out<-nlm(model,p=gammaInitial)
+   gamma <-out$estimate #parameter estimates
+}  
+```
+
+```{r}
+# Now we pass that statistics function to the boot command
+print('Running Bootstrap on non-linear model')
+enzymeBoot = boot(enzyme, enzymeFit, R = 20000, gammaInitial = gammaStart) # gammaStart: results from Lin. Regression
+enzymeBoot
+```
+
+```{r}
+# We see that the estimates match, as expected!
+print('We see that the estimates from bootstrap match the ones from nlm(), as expected!')
+enzymeBoot$t0
+optimizer$estimate
+```
+
+### Part a)
+
+```{r}
+enzymeCovMatrix = cov(enzymeBoot$t)
+print('Covariance matrix of the bootstrap estimates')
+enzymeCovMatrix
+```
+
+```{r}
+print('histogram & Q-Q plot of bootstrap estimates for the two parameters')
+par(mfrow=c(1,4))
+plot(enzymeBoot, index = 1)
+plot(enzymeBoot, index = 2)
+```
+
+```{r}
+# Finding the SE for gamma0 & gamma1
+enzymeBootStrapSE = sqrt(diag(enzymeCovMatrix))
+print('the SE for gamma0 & gamma1')
+enzymeBootStrapSE
+```
+
+### Part b) - Crude CI based on 95% Confidence Intervals from bootstrapped distributions
+
+```{r}
+z = 1.96
+Bootstrap.L.gamma0 = enzymeBoot$t0[1] - z*enzymeBootStrapSE[1]
+Bootstrap.L.gamma1 = enzymeBoot$t0[2] - z*enzymeBootStrapSE[2]
+Bootstrap.U.gamma0 = enzymeBoot$t0[1] + z*enzymeBootStrapSE[1]
+Bootstrap.U.gamma1 = enzymeBoot$t0[2] + z*enzymeBootStrapSE[2]
+# Crude (Normal) Confidence interval for gamma0 from Bootstrap results
+print('Crude (Normal) Confidence interval for gamma0 from Bootstrap results')
+c(Bootstrap.L.gamma0 , Bootstrap.U.gamma0 )
+# Crude (Normal) Confidence interval for gamma1 from Bootstrap results
+print('Crude (Normal) Confidence interval for gamma1 from Bootstrap results')
+c(Bootstrap.L.gamma1 , Bootstrap.U.gamma1 )
+```
+
+```{r}
+print('These are our original estimates. Clearly, they fall within the CIs above')
+enzymeBoot$t0
+```
+
+### Part c) Reflected CI based on Bootstrap
+```{r}
+# Gamma0
+print('For Gamma0')
+boot.ci(enzymeBoot, conf = .95, index = 1, type = 'basic')
+```
+
+```{r}
+# Gamma1
+print('For Gamma1')
+boot.ci(enzymeBoot, conf = .95, index = 2, type = 'basic')
+```
+
+### Part d)
+The Crude Confidence intervals match the Reflected ones pretty closely.
+There is a bit more of a difference when we look closely at the lower bound of the CIs for gamma0.
+This is probably due to our bootstrap estimates being a bit more skewed-left than normal distribution.
+i.e. there is a slight tail to the left.
+This is supported both by the histogram and the Q-Q plot
+
+## Problem 5 - Calculating Prediction Interval for future response Y* at X* = 27
+
+### Calculating 95% CI for y_hat at x = 27
+```{r}
+########### QUESTION 5 begins here ###################
+set.seed(32)
+library(boot)
+enzyme = read.csv('HW1_data.csv', sep=',') # Read in data
+enzyme = enzyme[1:2] # Remove empty columns
+# First we define the function, which produces the statistics we are interested in
+# In this case estimates for the gamma parameters
+enzymeFit<-function(Z, i, gammaInitial, x_pred) { # Note the additional argument x_pred
+   Zboot<-Z[i,]
+   x<-Zboot[[2]];y<-Zboot[[1]]
+   model <- function(gamma){
+      yhat = gamma[1]*x / (gamma[2]+x)
+      sum((y-yhat)^2) # Return SSE
+      }
+   out<-nlm(model,p=gammaInitial)
+   gamma <-out$estimate #parameter estimates
+   # This line has been added to modify the enzymeFit function and therefore the contents of the Bootstrap object
+   y_pred <- gamma[1]*x_pred / (gamma[2]+x_pred)
+}  
+```
+
+Using Bootstrap to estimate prediction
+```{r}
+enzymeBoot = boot(enzyme, enzymeFit, R = 20000, gammaInitial = gammaStart, x_pred = 27)
+enzymeBoot
+```
+The SE for the prediction is
+```{r}
+# The SE for the prediction is
+Bootstrap.SE.y_pred = sd(enzymeBoot$t)
+Bootstrap.SE.y_pred 
+```
+Calculating the CI for the predictable part i.e. g(x, gamma)
+```{r}
+# Calculating the CI for the predictable part i.e. g(x, gamma)
+boot.ci(enzymeBoot, conf = .95, type = c("norm","basic"))
+```
+
+This is a plot for our predictions i.e. for y_hat
+```{r}
+# This is a plot for our predictions i.e. for y_hat
+plot(enzymeBoot)
+```
+
+### Calculating 95% PI for y_hat at x = 27
+
+```{r}
+y_pred.SE = sqrt( var(enzymeBoot$t) + MSE ) # The standard error for a future observation
+g.hat = enzymeBoot$t0 # This is our MLE estimate for the parameters 
+# (It's derived from the bootstrap object, but it is the same as the numerical derivation of the MLEs)
+c(g.hat - qnorm(.975)*y_pred.SE, g.hat + qnorm(.975)*y_pred.SE)
+```
+
+I would expect the Prediction interval (the one just above) to contain a future response at X = 27 with 95% certainty. The confidence interval is narrower and corresponds to the expected value of future responses at X = 27. This simply means that if we were to make many many observations at X = 27, then their average would lie in the CI we derived with 95% confidence.
+
+## Problem 6
+```{r}
+########### QUESTION 6 begins here ###################
+enzyme = read.csv('HW1_data.csv', sep=',') # Read in data
+enzyme = enzyme[1:2] # Remove empty columns
+```
+Fitting the linear model with sqrt(x)
+```{r}
+enzyme.sqrt.fit = lm(y~sqrt(x), data = enzyme)
+summary(enzyme.sqrt.fit)
+```
+Calculating the AIC for the above linear model
+```{r}
+y = enzyme[1]
+x = enzyme[2]
+n = nrow(y)
+
+AIC.sqrt = -2*as.numeric(logLik(enzyme.sqrt.fit))/n + 2*2/n
+AIC.sqrt # This is AIC for the newly proposed model with sqrt(x)
+```
+Calculating the AIC for our non-linear model with the logLik function applied to the output of the nls() function
+```{r}
+AIC.model = -2*logLik(out2)/n +2*2/n # Using the output from the nls(), because it works with logLik
+AIC.model
+```
+
+We can see that the AIC for our non-linear model is lower than the AIC for the sqrt(x) model/
+Let's check if this conclusion will be supported empirically via Cross-Validation
+
+## Problem 7 - Cross Validation
+
+```{r}
+########### QUESTION 7 begins here ###################
+# Note, our seed has been set to 32 somewhere above.
+# Function for creating random index shuffling
+CVInd <- function(n,K) {  #n is sample size; K is number of parts; returns K-length list of indices for each part
+   m<-floor(n/K)  #approximate size of each part
+   r<-n-m*K  
+   I<-sample(n,n)  #random reordering of the indices
+   Ind<-list()  #will be list of indices for all K parts
+   length(Ind)<-K
+   for (k in 1:K) {
+      if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)  
+         else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+      Ind[[k]] <- I[kpart]  #indices for kth part of data
+   }
+   Ind
+}
+```
+Getting the parameter estimates from lm() call as first guess for fitting in CV
+```{r}
+names(enzyme.sqrt.fit$coefficients)<-NULL
+betaStart = enzyme.sqrt.fit$coefficients # Getting the parameter estimates from lm() call as first guess for fitting in CV
+betaStart
+```
+
+```{r}
+Nrep<-20 #number of replicates of CV
+K<-n  #K-fold CV on each replicate
+n.models = 2 #number of different models to fit and compare
+FitFun1 <- function(x1,p) p[1]*x1/(p[2]+x1)
+FitFun2 <- function(x1,p) p[1]+p[2]*sqrt(x1)
+n=nrow(enzyme)
+y<-enzyme$y
+yhat=matrix(0,n,n.models)
+MSE<-matrix(0,Nrep,n.models)
+```
+Running Cross Validation on the linear and non-linear model and calculating MSE for each iteration as well as avg MSE across all iterations
+```{r}
+for (j in 1:Nrep) {
+  Ind<-CVInd(n,K)
+  yhat=matrix(0,n,n.models)
+  for (k in 1:K) {
+     out<-nls(y~FitFun1(x,p),data=enzyme[-Ind[[k]],],start=list(p=gammaStart))
+     yhat[Ind[[k]],1]<-as.numeric(predict(out,enzyme[Ind[[k]],]))
+     out<-nls(y~FitFun2(x,p),data=enzyme[-Ind[[k]],],start=list(p=betaStart))
+     yhat[Ind[[k]],2]<-as.numeric(predict(out,enzyme[Ind[[k]],]))
+  } #end of k loop
+  MSE[j,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+} #end of j loop
+print('MSE from all 20 CV iterations')
+MSE
+print('Avg. MSE from all 20 CV iterations')
+MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+print('MSE standard deviations')
+MSEsd <- apply(MSE,2,sd); MSEsd   #SD of mean square CV error
+print('R^2 for the two models')
+r2<-1-MSEAve/var(y); r2  #CV r^2
+```
+
+Cross Validation shows that the MSE for our non-linear model is .294 while for the linear model its 1.11.
+Therefore, the non-linear model performs better on new data.
+
+Unfortunately, I wasn't able to find out why all the CV values for MSE are the same.
+I checked and confirmed that the index randomization for the take-one-out is different every time.
+I've also printed out yhat  and out and out2 to verify that the outcomes of the optimization are different every time.
+
+In the end, I think this might be expected behavior.
+Every time we create new folds, we are changing the order in which the values are estiamted and added to yhat, but the values end up being the same over all 20 iterations.
+
+## Problem 8 - Residual Plots & Comments
+```{r}
+########### QUESTION 8 begins here ###################
+non.lin.residuals = y - yhat[,1]
+lin.residuals = y - yhat[,2]
+print('Non-linear Residuals')
+non.lin.residuals
+print('Linear Residuals')
+lin.residuals
+print(' This is x')
+x = x[[1]]
+x
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(x, non.lin.residuals,xlab = 'x', ylab = 'Residuals', main = 'Residuals for Non-Linear Model')
+plot(x, lin.residuals,xlab = 'x', ylab = 'Residuals', main = 'Residuals for Linear Model')
+```
+
+We can certainly see an 'arch' in the residuals for the linear model.
+In other words, homoscedasticity doesn't seem to be satisfied, which is an important assumption for Non-Linear Least Squares.
+Therefore, the residual plots also support our conclusion that the non-linear model is more suitable for predicting responses for new observations (particualrly when it comes to large (x>30) or small (x<3) values for x)
+
+######################
+
+# Appendix
+
+This section is to be used for including your R code.
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
+
+

@@ -1,0 +1,241 @@
+---
+title: "PA1 - Homework 1"
+author: "Kristiyan Dimitrov"
+date: "9/28/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(scales)
+```
+
+## Exercise 2.9
+```{r}
+#First we need to read in our data
+data=read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/IBM-Apple-SP500 RR Data.csv",stringsAsFactors = FALSE)
+data=data[1:4]
+str(data) # It seems the names of the variables are actually included as the first row of data.
+```
+
+```{r}
+colnames(data)<- c("date","sp500","ibm","apple") # Replace the names of the dataframe variables 
+data <- data %>% #Removing the first row of data
+    filter(ibm!="IBM")
+str(data)
+
+```
+```{r}
+#We still have the problem of our data being in chr format. 
+#Need to cast it as date or integer
+data$date<-mdy(data$date) #For the date, we convert formatting from mm-dd-yyyy to yyyy-mm-dd
+#In the below three lines we convert sp500, ibm, and apple from chr to numeric 
+data$sp500 <- (as.numeric(substr(data$sp500,start = 1, stop = nchar(data$sp500)-1)))
+data$ibm <- (as.numeric(substr(data$ibm,start = 1, stop = nchar(data$ibm)-1)))
+data$apple <- (as.numeric(substr(data$apple,start = 1, stop = nchar(data$apple)-1)))
+
+str(data)
+```
+
+
+```{r}
+#Now that our data is properly formatted, we can create our two scatter plots
+ggplot(data = data) +
+    geom_point(mapping = aes(x = ibm, y=sp500)) +
+    labs(title="IBM vs S&P 500 % Returns", x="IBM % Stock Return", y="S&P500 % Return")
+
+ggplot(data = data) +
+    geom_point(mapping = aes(x = apple, y=sp500)) +
+    labs(title="Apple vs S&P 500 % Returns", x="Apple % Stock Return", y="S&P500 % Return")
+```
+
+```{r}
+#Now we do a LS linear fit:
+ibm_sp500 <- lm(data$ibm~data$sp500)
+apple_sp500 <- lm(data$apple~data$sp500)
+
+#We see that the IBM~S&P 500 beta coefficient is
+beta_ibm_sp500<-round(unname(ibm_sp500$coefficients[2]),4)
+ibm_sp500$coefficients[2]
+```
+
+```{r}
+#and the Apple~S&P 500 beta coefficient is:
+beta_apple_sp500<-round(unname(apple_sp500$coefficients[2]),4)
+apple_sp500$coefficients[2]
+```
+This tells us that Apple has a higher expected %-age return relative to the S&P 500.
+
+```{r}
+# Now we calculate the Standard Deviations of the rates of return for IBM, APPL, and S&P
+ibm_sd<-round(sd(data$ibm)/100,4)
+apple_sd<-round(sd(data$apple)/100,4)
+sp500_sd<-round(sd(data$sp500)/100,4)
+print(paste0("Standard Deviation of IBM's Rate or Return: ",ibm_sd))
+print(paste0("Standard Deviation of Apple's Rate or Return: ",apple_sd))
+print(paste0("Standard Deviation of S&P's Rate or Return: ", sp500_sd))
+```
+```{r}
+#Here we calculate the correlation matrix for the three rates of return
+cor_mat<-cor(data[,2:4],method="pearson")
+cor_mat
+```
+```{r}
+#Checking now that the beta coefficient for each stock is beta_hat = r * s_y / s_x
+round(beta_apple_sp500,.0001)==round(cor_mat[1,3]*apple_sd/sp500_sd,.0001)
+round(beta_ibm_sp500,.0001)==round(cor_mat[1,3]*ibm_sd/sp500_sd,.0001)
+```
+
+
+```{r,echo=FALSE}
+writeLines("The above comparisons (and the fact that it's true)
+shows that with a higher volatility (s_y) comes a higher beta_hat
+and therefore a higher expected return for the given stock
+
+Furthermore, in general we know that beta = s_xy / s_xx
+where s_xy= sum of the squared differences(y-y_bar)*(x-x_bar)
+Therefore, the further away the y values are from y_bar i.e.
+the higher the deviation / volatility, the higher the beta")
+```
+
+## Exercise 2.10
+
+```{r}
+data=read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/steakprices.csv",stringsAsFactors = FALSE) #Importing our data
+names(data)<-tolower(names(data)) #Converting everything to lowercase
+names(data)<-gsub(names(data),pattern="\\.",replacement = "_") # replacing . with _ in names.
+str(data)
+```
+
+```{r}
+#Notice that we have the prices of the steaks as chr with a $ in the front. We need to fix that
+data$chuck_price <- (as.numeric(substr(data$chuck_price,start = 2, stop = nchar(data$chuck_price))))
+data$porthse_price <- (as.numeric(substr(data$porthse_price,start = 2, stop = nchar(data$porthse_price))))
+data$ribeye_price <- (as.numeric(substr(data$ribeye_price,start = 2, stop = nchar(data$ribeye_price))))
+str(data)
+```
+```{r}
+#To calculate the price elasticity, we need to first calculate the log values for all prices & qtys
+data <- data %>% 
+    # Calculating log of chuck price & qty
+    mutate(log_chuck_qty=log(chuck_qty),log_chuck_price=log(chuck_price)) %>% 
+    # Calculating log of porterhouse price & qty
+    mutate(log_porthse_qty=log(porthse_qty),log_porthse_price=log(porthse_price)) %>%
+    # Calculating log of ribeye price & qty
+    mutate(log_ribeye_qty=log(ribeye_qty),log_ribeye_price=log(ribeye_price))
+    
+str(data)
+```
+```{r}
+#The price elasticity for each type of steak is the beta coefficient 
+# in the LS model b/w the log of the price and log of the qty
+chuck_elas <- round(unname(lm(data$log_chuck_qty ~ data$log_chuck_price)$coefficients[2]),4) 
+porthse_elas <- round(unname(lm(data$log_porthse_qty ~ data$log_porthse_price)$coefficients[2]),4)
+ribeye_elas <- round(unname(lm(data$log_ribeye_qty ~ data$log_ribeye_price)$coefficients[2]),4)
+```
+
+```{r,echo=FALSE}
+print(paste0("The price elasticity of Chuck steaks is: ",chuck_elas))
+print(paste0("The price elasticity of Porterhouse steaks is: ",porthse_elas))
+print(paste0("The price elasticity of Ribeye steaks is: ",ribeye_elas))
+```
+
+```{r}
+#Let's calculate the mean prices for each steak
+mean_chuck_price <- mean(data$chuck_price)
+print(paste0("The mean price for Chuck is: ", mean_chuck_price))
+mean_porthse_price <- mean(data$porthse_price)
+print(paste0("The mean price for Porthouse is: ",mean_porthse_price))
+mean_ribeye_price <- mean(data$ribeye_price)
+print(paste0("The mean price for Ribeye is: ", mean_ribeye_price))
+#Next we put the mean prices and the price elasticities in a tibble.
+prices_and_elas<- tibble(c(mean_chuck_price,mean_porthse_price,mean_ribeye_price),c(chuck_elas,porthse_elas,ribeye_elas))
+#We give the columns some names
+names(prices_and_elas)<- c("mean_prices","price_elasticities")
+#And finally we plot the elasticities & mean prices
+ggplot(data = prices_and_elas) +
+    geom_point(mapping = aes(x = prices_and_elas$mean_prices, y=prices_and_elas$price_elasticities)) +
+    geom_label(mapping = aes(x = prices_and_elas$mean_prices, y=prices_and_elas$price_elasticities, label=c("Chuck","Porterhouse","Ribeye")),nudge_y=.08) +
+    labs(title="Price Elasticities vs. Mean Steak Prices", x="Mean Steak Prices", y="Price Elasticities")
+```
+
+```{r,echo=FALSE}
+print("The above graph shows us that the price elasticity for Porterhouse is much lower. 
+This means that people are much more sensitive to changes in the Porterhouse price than the Chuck or Ribeye price")
+```
+
+```{r}
+#Based on the definition of price elasticity, we can assume that 
+#the demand will change by an amount equal to elasticity * % price change
+
+#Therefore:
+demand_change_chuck=percent(chuck_elas*.1)
+demand_change_porterhse=percent(porthse_elas*.1)
+demand_change_ribeye=percent(ribeye_elas*.1)
+```
+```{r,echo=FALSE}
+print(paste0("We expect the demand for Chuck to go down by ",demand_change_chuck," if the price goes up by 10%"))
+print(paste0("We expect the demand for Porterhouse to go down by ",demand_change_porterhse," if the price goes up by 10%"))
+print(paste0("We expect the demand for Ribeye to go down by ",demand_change_ribeye," if the price goes up by 10%"))
+```
+
+## Exercise 2.11
+
+```{r}
+#As always, we begin by importing our data
+data=read.csv("/Users/kristiyan/Documents/MSiA 401 - Predictive 1/Homeworks/smoking-cancer.csv",stringsAsFactors = FALSE)
+str(data)
+```
+```{r}
+#We make 4 scatterplots of Smoke with each of the types of cancer
+ggplot(data = data) +
+    geom_point(mapping = aes(x = Smoke, y=Bladder)) +
+    labs(title="Bladder Cancer vs Cigarettes Smoked", x="Cigarettes (hundreds/capita)", y="Bladder Cancer: # of Deaths per 100k of the population") +
+    geom_label(mapping = aes(x = Smoke, y=Bladder, label=STATE),nudge_y=.2) 
+
+ggplot(data = data) +
+    geom_point(mapping = aes(x = Smoke, y=Lung)) +
+    labs(title="Lung Cancer vs Cigarettes Smoked", x="Cigarettes (hundreds/capita)", y="Lung Cancer: # of Deaths per 100k of the population") +
+    geom_label(mapping = aes(x = Smoke, y=Lung, label=STATE),nudge_y=1) 
+
+ggplot(data = data) +
+    geom_point(mapping = aes(x = Smoke, y=Kidney)) +
+    labs(title="Kidney Cancer vs Cigarettes Smoked", x="Cigarettes (hundreds/capita)", y="Kidney Cancer: # of Deaths per 100k of the population") +
+    geom_label(mapping = aes(x = Smoke, y=Kidney, label=STATE),nudge_y=.2)
+
+ggplot(data = data) +
+    geom_point(mapping = aes(x = Smoke, y=Leukemia)) +
+    labs(title="Leukemia vs Cigarettes Smoked", x="Cigarettes (hundreds/capita)", y="Leukemia: # of Deaths per 100k of the population") +
+    geom_label(mapping = aes(x = Smoke, y=Leukemia, label=STATE),nudge_y=.2) 
+```
+
+```{r,echo=FALSE}
+print("A few observations: We see that there appear to be patterns of linear relationships between Cigarettes smoked and the first 3 cancer types. Namely, Bladder, Lung, and Kidney. There doesn't appear to be any pattern between cigarettes smoked and Leukemia")
+```
+
+```{r}
+#Next, we calculate the correlation matrix
+cor_mat<-cor(data[,2:6],method="pearson")
+cor_mat
+```
+
+```{r}
+#And we run a correlation test for eachtype of cancer
+cor_test_smoke_bladder<-cor.test(data$Smoke,data$Bladder,method="pearson")
+cor_test_smoke_lung<-cor.test(data$Smoke,data$Lung,method="pearson")
+cor_test_smoke_kidney<-cor.test(data$Smoke,data$Kidney,method="pearson")
+cor_test_smoke_leukemia<-cor.test(data$Smoke,data$Leukemia,method="pearson")
+```
+
+```{r,echo=FALSE}
+print(paste0("The t statistic for Smoke & Bladder is: ",round(cor_test_smoke_bladder[[1]],3)))
+print(paste0("The t statistic for Smoke & Lung is: ",round(cor_test_smoke_lung[[1]],3)))
+print(paste0("The t statistic for Smoke & Kidney is: ",round(cor_test_smoke_kidney[[1]],3)))
+print(paste0("The t statistic for Smoke & Leukemia is: ",round(cor_test_smoke_leukemia[[1]],3)))
+```
+
+

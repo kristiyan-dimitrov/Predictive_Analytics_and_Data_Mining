@@ -1,0 +1,1342 @@
+---
+title: "PA2 - Homework 3"
+author: "Kristiyan Dimitrov"
+date: "05/03/2020"
+output: 
+  pdf_document: 
+    fig_caption: yes
+    highlight: tango
+    fig_width: 6
+    fig_height: 4.5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment="  ")
+```
+
+```{r common}
+library(readxl) # To read in Excel
+library(yaImpute) # To do K-Nearest Neighbours
+library(mgcv)
+
+set.seed(42)
+
+CVInd <- function(n,K) { 
+  # n is sample size; K is number of parts; 
+  # returns K-length list of indices for each part
+  m<-floor(n/K) #approximate size of each part
+  r<-n-m*K
+  I<-sample(n,n) #random reordering of the indices
+  Ind<-list() #will be list of indices for all K parts
+  length(Ind)<-K
+  for (k in 1:K) {
+    if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+    else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+    Ind[[k]] <- I[kpart] #indices for kth part of data
+  }
+  Ind
+}
+
+## THIS FUNCTION USED REPEATEDLY IN PROBLEM 1 TO FIND BEST K for KNN on heart data
+LOOCV_2KNN <- function(K1, K2){
+  Nrep<-1 # number of replicates of CV
+K<-nrow(heart)  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+n.models = 2 #number of different models to fit
+n=nrow(heart)
+y<-heart$log10_cost
+yhat=matrix(0,n,n.models) 
+MSE<-matrix(0,Nrep,n.models)
+for (j in 1:Nrep) {
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+     train<-as.matrix(heart[-Ind[[k]],1:8]) # Training data for Predictors
+     test<-as.matrix(heart[Ind[[k]],1:8])  # Test data for Predictors
+     ytrain<-heart[-Ind[[k]],9] # The response variable for the Training data
+     out<-ann(train,test,K1,verbose=F) # Train the model
+     ind<-as.matrix(out$knnIndexDist[,1:K1]) # These are the nearest neighbours
+     yhat[Ind[[k]],1]<-apply(ind,2,function(x) mean(ytrain[x])) # Look at the training data at the indices of the closest neighbours, compute the mean and return that as the prediction for the k-th fold
+     out<-ann(train,test,K2,verbose=F)
+     ind<-as.matrix(out$knnIndexDist[,1:K2])
+     yhat[Ind[[k]],2]<-apply(ind,2,function(x) mean(ytrain[x]))
+  } #end of k loop
+  MSE[j,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+} #end of j loop
+MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+MSEsd <- apply(MSE,2,sd);   #SD of mean square CV error
+r2<-1-MSEAve/var(y); r2  #CV r^2
+}
+
+## THIS FUNCTION USED REPEATEDLY IN PROBLEM 3 TO FIND BEST SPAN & DEGREE
+loessCV = function(span, degree){
+  Nrep<-2 # number of replicates of CV
+  K<-10  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+  n.models = 3 #number of different models to fit
+  n=nrow(heart)
+  y<-heart$log10_cost
+  yhat=matrix(0,n,n.models) 
+  MSE<-matrix(0,Nrep,n.models)
+  for (j in 1:Nrep) {
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+       train<-heart[-Ind[[k]],] # Training data 
+       test<-heart[Ind[[k]],1:4]  # Test data for Predictors
+       
+       # Model 1
+       out1<-loess(log10_cost ~., data=heart,degree=degree[1], span=span[1]); # Train the model
+       yhat[Ind[[k]],1] = predict(out1,test)
+       # Model 2
+      out2<-loess(log10_cost ~., data=heart,degree=degree[2], span=span[2]); # Train the model
+       yhat[Ind[[k]],2] = predict(out2,test)
+       # Model 3
+      out3<-loess(log10_cost ~., data=heart,degree=degree[3], span=span[3],control=loess.control(surface = "direct")); # Train the model
+       yhat[Ind[[k]],3] = predict(out3,test)
+    } #end of k loop
+    MSE[j,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+  } #end of j loop
+  MSEAve<- apply(MSE,2,mean);  #averaged mean square CV error
+  MSEsd <- apply(MSE,2,sd);   #SD of mean square CV error
+  r2<-1-MSEAve/var(y);  #CV r^2
+  lst = list(MSEAve, MSEsd, r2)
+  return(lst)
+}
+
+```
+
+# Problem 1 - KNN
+
+```{r q1_load_data}
+########### QUESTION 1 begins here ###################
+# loading data for question 1
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+heart[,1:8] = scale(heart[,1:8]) # Standardizing the predictor variables!
+head(heart)
+```
+
+## (a) - Using n-fold CV to find the best K for K-NN
+
+Using 20 repetitions of n-fold CV (aka LOOCV) to compare K=5 to K=10
+
+```{r}
+Nrep<-20 # number of replicates of CV
+K<-nrow(heart)  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+n.models = 2 #number of different models to fit
+n=nrow(heart)
+y<-heart$log10_cost
+yhat=matrix(0,n,n.models) 
+MSE<-matrix(0,Nrep,n.models)
+for (j in 1:Nrep) {
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+     train<-as.matrix(heart[-Ind[[k]],1:8]) # Training data for Predictors
+     test<-as.matrix(heart[Ind[[k]],1:8])  # Test data for Predictors
+     ytrain<-heart[-Ind[[k]],9] # The response variable for the Training data
+     K1=5;K2=10
+     out<-ann(train,test,K1,verbose=F) # Train the model
+     ind<-as.matrix(out$knnIndexDist[,1:K1]) # These are the nearest neighbours
+     yhat[Ind[[k]],1]<-apply(ind,2,function(x) mean(ytrain[x])) # Look at the training data at the indices of the closest neighbours, compute the mean and return that as the prediction for the k-th fold
+     out<-ann(train,test,K2,verbose=F)
+     ind<-as.matrix(out$knnIndexDist[,1:K2])
+     yhat[Ind[[k]],2]<-apply(ind,2,function(x) mean(ytrain[x]))
+  } #end of k loop
+  MSE[j,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+} #end of j loop
+MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+MSEsd <- apply(MSE,2,sd); MSEsd   #SD of mean square CV error
+r2<-1-MSEAve/var(y); r2  #CV r^2
+```
+
+The first row shows the average CV MSE for the two models.
+The second row shows us 0 standard deviation for both. This is expected behavior, because we are doing LOOCV.
+In other words, just like in HW1, the average MSE across all folds for a given randomized split of data will be the same across all splits, because we eventually go through each data point one at a time.
+
+Looking at the first few rows of the MSE table, we confirm that the average MSE across different iterations of CV is the same.
+
+```{r}
+head(MSE)
+```
+
+In any case, the third row shows us that K=10 did slightly better with a CV R-squared of 58.43% vs 56.77% for K=5.
+
+Let's try K=10 vs K=15. Note, I will not be doing more than one repetition of LOOCV, because as discussed above, it's pointless - the results are the same every iteration.
+
+```{r}
+LOOCV_2KNN(10,15)
+```
+
+We see that K=15 did worse, with a CV R-squared of 57.14%%
+Let's try K=10 and K=12
+
+```{r}
+LOOCV_2KNN(10,12)
+```
+
+K=12 doesn't do better. Let's compare K=8 and K=10
+
+```{r}
+LOOCV_2KNN(8,10)
+```
+
+K=8 does slightly better! Let's compare it with K=9
+
+```{r}
+LOOCV_2KNN(8,9)
+```
+
+Again, K=8 is better. Let's compare with K=7
+
+```{r}
+LOOCV_2KNN(7,8)
+```
+
+I conclude that K=8 is the best value for this model on this data.
+I already discussed the cons of using LOOCV for KNN - we can't use multiple replicates.
+The pro is that we are using as much of the training data as possible, so we are as close as possible to the way the model would be performing on completely new data.
+
+## b) What is the CV estimate for the prediction error Stand. Dev.?
+I need to run LOOCV with K=8 (the best model).
+
+```{r}
+K<-nrow(heart)  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+n.models = 1 #number of different models to fit
+n=nrow(heart)
+y<-heart$log10_cost
+yhat=matrix(0,n,n.models) 
+Ind<-CVInd(n,K)
+
+  for (k in 1:K) {
+     train<-as.matrix(heart[-Ind[[k]],1:8]) # Training data for Predictors
+     test<-as.matrix(heart[Ind[[k]],1:8])  # Test data for Predictors
+     ytrain<-heart[-Ind[[k]],9] # The response variable for the Training data
+     K1=5;
+     out<-ann(train,test,K1,verbose=F) # Train the model
+     ind<-as.matrix(out$knnIndexDist[,1:K1]) # These are the nearest neighbours
+     yhat[Ind[[k]],1]<-apply(ind,2,function(x) mean(ytrain[x])) # Look at the training data at the indices of the closest neighbours, compute the mean and return that as the prediction for the k-th fold
+  } #end of k loop
+```
+
+I now have y & yhat for the K=8 model.
+The sd() of these two will be the prediction error standard deviation
+
+```{r}
+sd(y-yhat)
+```
+
+## c) 
+Now I fit the model on all the data, using K=8
+These are the indices of the 8 nearest neighbours
+I need to standardize the values for the new observation as well.
+
+```{r}
+predictors<-as.matrix(heart[,1:8]) # This is the standardized data
+
+## NEED ORIGINAL HEART DATA TO STANDARDIZE THE PREDICTOR VALUES FOR THE NEW OBSERVATION
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+
+## Let's try to standardize the input data
+ageMean = mean(heart$age)
+gendMean = mean(heart$gend)
+intvnMean = mean(heart$intvn)
+drugsMean = mean(heart$drugs)
+ervisMean = mean(heart$ervis)
+compMean = mean(heart$comp)
+comorbMean = mean(heart$comorb)
+durMean = mean(heart$dur)
+
+ageSD = sd(heart$age)
+gendSD = sd(heart$gend)
+intvnSD = sd(heart$intvn)
+drugsSD = sd(heart$drugs)
+ervisSD = sd(heart$ervis)
+compSD = sd(heart$comp)
+comorbSD = sd(heart$comorb)
+durSD = sd(heart$dur)
+
+ageNew = (59-ageMean)/ageSD
+gendNew = (0-gendMean)/gendSD
+intvnNew =(10-intvnMean)/intvnSD
+drugsNew = (0-drugsMean)/drugsSD
+ervisNew = (3-ervisMean)/ervisSD
+compNew = (0-compMean)/compSD
+comorbNew = (4-comorbMean)/comorbSD
+durNew = (300-durMean)/durSD
+
+response = t(c(ageNew, gendNew,intvnNew,drugsNew,ervisNew,compNew,comorbNew,durNew))
+# names(response) <- names(heart)[1:8]
+
+# response<- t(c(59,0,10,0,3,0,4,300))
+K = 8
+bestKNN <- ann(predictors,response,K,verbose=F) # Train the model on the standardized data
+indices = bestKNN$knnIndexDist[,1:8] # These are the indices of the 8 nearest neighbours
+indices
+```
+
+Now I compute the average log10_cost for these 8 neighbours (at the 8 indices in the data)
+
+```{r}
+mean(heart$log10_cost[indices])
+```
+
+These means that the cost for this individual would be 10^3.482699, which is
+
+```{r}
+10^3.379489
+```
+
+# Problem 2 - GAM
+
+I import the data, standardize the predictors and normalize the response.
+After talking with Suraj in Office Hours, I understand it's not necessary for me to normalize the response, but I will keep it for consistency across the HW.
+
+```{r q2_data}
+########### QUESTION 2 begins here ################### 
+# loading data for question 2
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+head(heart)
+```
+
+Fitting a GAM. Note that the gend, drugs, and comp are included as direct linear variables, because they don't have enough unique values for a smoother function.
+I tried turning them into factors and the results (in terms of variable significance) were the same.
+
+```{r}
+myGAM<-gam(log10_cost~s(age) + gend + s(intvn) + drugs + s(ervis) + comp + s(comorb) + s(dur), data=heart, family=gaussian(), sp=c(-1,-1,-1,-1,-1,-1,-1,-1))
+summary(myGAM)
+```
+
+Now I will make some plots to interpret the results. 
+Note that I will be comparing only the variables which are fitted within smoother functions.
+I won't compare with the ones included directly.
+
+```{r}
+par(mfrow=c(2,3))
+plot(myGAM)
+```
+Looking at the output, I can make the same conclusions as previous reviews of this data have suggested.
+- Intvn has the highest impact b/c as we change the value of intvn, the value of the smoother function changes the most.
+- ervis is also influential, while the other 3 not so much.
+It's important to note that GAMs don't capture interactions so our interpretation of the above graphs might not be 'air-tight'.
+Also, even though duration doesn't change the value of the smoothing function very much, it does however have the highest significant coefficient from the summary output above (value is 5.917). So smaller changes in the smoother function for duration will still have impact on y. We can compare the coefficients, because, we are working with standardized data.
+
+
+## b)
+
+The model above had the following smoothing parameters (estimated by the function itself):
+```{r}
+myGAM$sp
+```
+
+I will use the above model to make predictions in LOOCV, jsut like in problem 1 in order to get predictions for each out-of-bag sample.
+More specifically, when fitting the GAM model to the training data, I will use sp = myGAM$sp
+The goal is to estimate the prediction error standard deviation.
+
+```{r}
+K<-nrow(heart)  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+n.models = 1 #number of different models to fit
+n=nrow(heart)
+y<-heart$log10_cost
+yhat=matrix(0,n,n.models) 
+Ind<-CVInd(n,K)
+  for (k in 1:K) {
+     train<-heart[-Ind[[k]],] # Training data 
+     test<-heart[Ind[[k]],1:8]  # Test data for Predictors
+     out<-gam(log10_cost~s(age) + gend + s(intvn) + drugs + s(ervis) + comp + s(comorb) + s(dur), data=train, family=gaussian(), sp=myGAM$sp) # Train the model
+     yhat[Ind[[k]],1] = predict(out,test)
+}
+```
+
+I now have y & yhat for the myGAM model.
+The sd() of these two will be the prediction error standard deviation
+
+```{r}
+sd(y-yhat)
+```
+
+It is important to note that this is for the normalized response variable. If I need the non-normalized standard deviation, I could just skip normalizing the response variable or 'denormalize' y and yhat before placing them in the sd() function.
+
+What are the pros & cons of using n-fold CV vs 10-fold cv for GAMs?
+A general drawback of using n-fold CV is that it can be initialized only once. On the other hand, k-fold CV could give us a more ronust estimate for model accuracy w.r.t. new data, which is less influenced by the randomness of the fold selection.
+
+Another observation is related to the bias-variance tradeoff. When we use n-fold, we are fitting our model to more of the data, therefore we have lower bias than with k-fold. On the other hand, we will have more variance when we see new data due to overfitting.
+
+In terms of specific drawbacks for GAM models, I think that using a k-fold model would give less data to the training data.
+If specific attributes don't have many unique values this is a problem for GAM and with k-fold that exacerbates the problem.
+
+## c) - Making a prediction for a new observation
+
+Note that I standardize the input variables and make a prediction.
+That prediction lies in the range [0,1], because I fit my GAM model with a normalized response variable.
+Therefore, to get a prediction in the original scale of the data I have to 'denormalize' the prediction.
+I do the above in some code below. The result end up being:
+
+```{r}
+# loading data for question 2
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+# heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+# head(heart)
+
+## Let's try to standardize the input data
+ageMean = mean(heart$age)
+gendMean = mean(heart$gend)
+intvnMean = mean(heart$intvn)
+drugsMean = mean(heart$drugs)
+ervisMean = mean(heart$ervis)
+compMean = mean(heart$comp)
+comorbMean = mean(heart$comorb)
+durMean = mean(heart$dur)
+
+ageSD = sd(heart$age)
+gendSD = sd(heart$gend)
+intvnSD = sd(heart$intvn)
+drugsSD = sd(heart$drugs)
+ervisSD = sd(heart$ervis)
+compSD = sd(heart$comp)
+comorbSD = sd(heart$comorb)
+durSD = sd(heart$dur)
+
+ageNew = (59-ageMean)/ageSD
+gendNew = (0-gendMean)/gendSD
+intvnNew =(10-intvnMean)/intvnSD
+drugsNew = (0-drugsMean)/drugsSD
+ervisNew = (3-ervisMean)/ervisSD
+compNew = (0-compMean)/compSD
+comorbNew = (4-comorbMean)/comorbSD
+durNew = (300-durMean)/durSD
+
+response = as.data.frame(t(c(ageNew, gendNew,intvnNew,drugsNew,ervisNew,compNew,comorbNew,durNew)))
+names(response) <- names(heart)[1:8]
+
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+# head(heart)
+```
+
+
+```{r}
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+
+# Finally, we need to 'denormalize' the result i.e. the log10_cost response variable used to be normalized to be in the range [0,1]
+# The prediction is ~.75, which I now convert to the original scale of the log10_cost variable.
+(predict(myGAM, response))*(max(heart[9])-min(heart[9]))+min(heart[9])
+```
+
+Therefore, our prediction for the cost is 10^3.556478. It's not very close to our KNN prediction, but it's important to note 
+that our predictions are very sensitive, because they are in log10 scale
+i.e. even small changes in log10_cost lead to big changes in actual $ cost.
+
+```{r}
+10^3.556478 
+```
+
+
+# Problem 3
+
+Loading the relevant data
+
+```{r q3_data}
+########### QUESTION 3 begins here ################### 
+# loading data for question 3
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart = heart[,c(3,4,5,8,9)] # Using only the relevant predictors: intvn, drugs, ervis, dur
+heart[,1:4] = scale(heart[,1:4]) # Standardizing the predictor variables!
+heart <- as.data.frame(heart)
+head(heart)
+```
+
+## a) - Using 10-fold CV to find the optimal span & degree
+
+Note that the problem doesn't specify I have to use n-fold CV.
+I will define a function called loessCV, which does 10-fold CV with 20 initializations of the folds and allows me to compare 3 models at a time. The output contains the average MSE and the R-squared from CV.
+I will run it within suppressWarnings() to ignore the many warning messages that appear in the output.
+
+First I use degree = 1 and compare span = .1 , .2 , .3
+
+```{r}
+sp1 = c(.1,.2,.3)
+deg1 = c(1,1,1)
+suppressWarnings(loessCV(sp1,deg1))
+```
+
+It appears that span = .1 does best.
+Let's try some more values around .1: .08, .1, .12
+
+```{r}
+sp1 = c(.08,.1,.12)
+deg1 = c(1,1,1)
+suppressWarnings(loessCV(sp1,deg1))
+```
+
+span = .08 does better. Let's compare it with .04 and .06
+
+```{r}
+sp1 = c(.04,.06,.08)
+deg1 = c(1,1,1)
+suppressWarnings(loessCV(sp1,deg1))
+```
+
+.06 does slightly better. Let's look at values closer to it: .05,.06,.07
+
+```{r}
+sp1 = c(.05,.06,.07)
+deg1 = c(1,1,1)
+suppressWarnings(loessCV(sp1,deg1))
+```
+
+.05 does best. I will pick it as the best span value. Now I will check degree = 0, 1, 2
+
+```{r}
+sp1 = c(.05,.05,.05)
+deg1 = c(0,1,2)
+suppressWarnings(loessCV(sp1,deg1))
+```
+
+Degree = 2 appears to perform the best.
+
+## b) - Using C_p to find the best span
+
+First I will find an estimate for RMSE (the loess$s attribute is the RMSE)
+
+```{r}
+##first find sigma_hat for a low-bias model###
+suppressWarnings(for (lambda in seq(.01,.2,.01)) {
+  out<-loess(log10_cost ~., data=heart, degree=2, span=lambda)
+  print(c(lambda,out$s))
+  })
+```
+
+Looking at the estimates, the best RMSE estimate is .533 (at lambda = .08)
+
+```{r}
+sig_hat<-.533
+```
+
+Now I will use that estimate to find the best span via C_p.
+
+```{r}
+##now find Cp for various lambda###
+suppressWarnings(
+  for (lambda in c(seq(.01,.2,.01))) {
+      out<-loess(log10_cost ~., heart, degree=2, span=lambda)
+      SSE<-sum((heart[,5]-out$fitted)^2)
+      Cp <- (SSE+2*out$trace.hat*sig_hat^2)/nrow(heart)
+      print(c(lambda,Cp))
+  }
+)
+```
+
+Looking at the output, it appears that span = .08 is the best choice (somewhere around the first local minimum at Cp = 0.3324228)
+This value is close to the one suggested by CV.
+
+Now, I will repeat the two steps to find the best degree.
+
+```{r}
+##first find sigma_hat for a low-bias model###
+suppressWarnings(for (degree in c(0,1,2)) {
+  out<-loess(log10_cost ~., data=heart, degree=degree, span=.08,control=loess.control(surface = "direct"))
+  print(c(degree,out$s))
+  })
+```
+
+The best RMSE estimate is at deg = 2 and is RMSE = .468
+Now I use that to estimate best degree via Cp
+
+```{r}
+sig_hat = .49
+##now find Cp for various lambda###
+suppressWarnings(
+  for (deg in c(0,1,2)) {
+      out<-loess(log10_cost ~., heart, degree=deg, span=.08,control=loess.control(surface = "direct"))
+      SSE<-sum((heart[,5]-out$fitted)^2)
+      Cp <- (SSE+2*out$trace.hat*sig_hat^2)/nrow(heart)
+      print(c(deg,Cp))
+  }
+)
+```
+
+Unlike with CV, the best degree choice is deg = 1 based on Cp.
+
+## c) Prediction Standard Error
+
+Recall that the optimal parameters for loess found via CV are sp = .05 and degree = 2.
+
+I will now run nfold-CV to get an estimate for the prediction error standard deviation for that best model
+
+```{r}
+predErrorCV = function(){
+  K<-nrow(heart)  # n-fold CV on each replicate i.e. LOOCV Leave One Out CV
+  n.models = 1 
+  n=nrow(heart)
+  y<-heart$log10_cost
+  yhat=matrix(0,n,n.models) 
+
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+       train<-heart[-Ind[[k]],] # Training data 
+       test<-heart[Ind[[k]],1:4]  # Test data for Predictors
+       
+       # Model 1
+       out1<-loess(log10_cost ~., data=train,degree=2, span=.05); # Train the model
+       yhat[Ind[[k]],1] = predict(out1,test)
+     
+    } #end of k loop
+}
+```
+
+```{r}
+suppressWarnings(  
+  predErrorCV()
+)
+```
+
+And take standard deviation of y - yhat
+
+```{r}
+sd(y-yhat)
+```
+
+This standard deviation seems a bit high. Looking at the errors, # 14 appears unusual.
+At this stage, my only suspicion might be that this point is somewhat of an outlier
+i.e. somewhere close to the edges of the range for the predictior variables where the smoother degree 2 approximation doesn't work very well.
+
+```{r}
+head(y-yhat,15)
+```
+
+I look at the 14th observation in the data, along with a few of the surrounding one. Some of the predictor values for the 14th observation are quite below their respective averages, but so is the cost. In any case, this patient 'stands out' from the rest.
+
+```{r}
+heart[10:15,]
+```
+
+The Cp estimate for the prediction error standard deviation is sqrt(Cp):
+```{r}
+sqrt(.258)
+```
+
+This is much lower than the one derived from CV.
+
+## d) Making a prediction for a new observation
+
+I will fit the model with degree=1 and span = .05 (based on the CV).
+When making a prediction, I will ignore the attributes of the new patient, which were not included in the model
+i.e. I will include only intvn, drugs, dur, and ervis.
+
+I will also standardize the input variables with the mean and sd from the dataset.
+
+```{r}
+### Reloading the data so that I can get the Means and Standard Deviations
+# In order to standardize the values for the new prediction
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart = heart[,c(3,4,5,8,9)] # Using only the relevant predictors: intvn, drugs, ervis, dur
+# heart[,1:4] = scale(heart[,1:4]) # Standardizing the predictor variables!
+heart <- as.data.frame(heart)
+
+## Let's try to standardize the input data
+intvnMean = mean(heart$intvn)
+drugsMean = mean(heart$drugs)
+ervisMean = mean(heart$ervis)
+durMean = mean(heart$dur)
+
+intvnSD = sd(heart$intvn)
+drugsSD = sd(heart$drugs)
+ervisSD = sd(heart$ervis)
+durSD = sd(heart$dur)
+
+intvnNew =(10-intvnMean)/intvnSD
+drugsNew = (0-drugsMean)/drugsSD
+ervisNew = (3-ervisMean)/ervisSD
+durNew = (300-durMean)/durSD
+
+response = as.data.frame(t(c(intvnNew,drugsNew,ervisNew,durNew)))
+names(response) <- names(heart)[1:4]
+
+# Finally, in order to fit the model I reimport the full dataset
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart = heart[,c(3,4,5,8,9)] # Using only the relevant predictors: intvn, drugs, ervis, dur
+heart[,1:4] = scale(heart[,1:4]) # Standardizing the predictor variables!
+heart <- as.data.frame(heart)
+suppressWarnings(out<-loess(log10_cost ~., heart, degree=2, span=.05,control=loess.control(surface = "direct")))
+suppressWarnings(predict(out, response))
+```
+
+Our answer is 10^3.413035  , which is pretty close to the one we got from KNN. The issue is that, since we are in log10 scale, even small deviations in our prediction lead to a large change in predicted cost.
+
+```{r}
+10^3.413035 
+```
+
+This answer is quite close to our KNN prediction.
+
+# Problem 4
+
+Loading the relevant data
+
+```{r q4_data}
+########### QUESTION 4 begins here ################### 
+# loading data for question 4
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+heart <- as.data.frame(heart)
+head(heart)
+```
+
+## a) Using CV to find the best value of nterms
+
+Similar to loessCV, I define a function called pprCV, which takes two numbers: n1 & n2 and does 20 initializations of 10-fold CV for PPR with nterms = n1 and n2 respectively.
+Returns the AvgMSE, AvgMSE SD, and R-squared for the CV.
+I start by comparing n=5 and n=10. I wrap the function call in suppressWarnings().
+
+```{r}
+pprCV = function(n1,n2){
+
+  Nrep<-20 # number of replicates of CV
+  K<-10 
+  n.models = 2 #number of different models to fit
+  n=nrow(heart)
+  y<-heart$log10_cost
+  yhat=matrix(0,n,n.models) 
+  MSE<-matrix(0,Nrep,n.models)
+  for (j in 1:Nrep) {
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+       train<-heart[-Ind[[k]],] # Training data 
+       test<-heart[Ind[[k]],1:8]  # Test data for Predictors
+     
+    
+       out1<- ppr(log10_cost ~., data=train, nterms=n1)# Train the model
+       yhat[Ind[[k]],1] = predict(out1,test)
+       
+       out2<- ppr(log10_cost ~., data=train, nterms=n2)# Train the model
+       yhat[Ind[[k]],2] = predict(out2,test)
+       
+    } #end of k loop
+    MSE[j,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+    # print(MSE)
+  } #end of j loop
+
+  MSEAve<- apply(MSE,2,mean);  #averaged mean square CV error
+  MSEsd <- apply(MSE,2,sd); #SD of mean square CV error
+  r2<-1-MSEAve/var(y);  #CV r^2
+  return(list(MSEAve,MSEsd,r2))
+}
+
+suppressWarnings(pprCV(5,10))
+
+```
+
+I will now do 4 pairs: 4 & 5; 3 & 4, 2 & 3, 1 & 2
+
+```{r}
+suppressWarnings(pprCV(4,5))
+```
+```{r}
+suppressWarnings(pprCV(3,4))
+```
+```{r}
+suppressWarnings(pprCV(2,3))
+```
+```{r}
+suppressWarnings(pprCV(1,2))
+```
+
+I would interpret nterms=1 as a single non-parametric model which is a function of a linear combination of all the variables.
+
+## b) 
+```{r}
+bestPPR = ppr(log10_cost ~., data=heart, nterms=1)
+summary(bestPPR)
+```
+
+Now I will run CV to get an estimate of the predicted error standard deviation for the bestPPR mode with nterms = 1
+
+```{r}
+  K<-nrow(heart) 
+  n.models = 1
+  n=nrow(heart)
+  y<-heart$log10_cost
+  yhat=matrix(0,n,n.models) 
+
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+       train<-heart[-Ind[[k]],] # Training data 
+       test<-heart[Ind[[k]],1:8]  # Test data for Predictors
+     
+       out1<- ppr(log10_cost ~., data=train, nterms=1)# Train the model
+       yhat[Ind[[k]],1] = predict(out1,test)
+       
+    } #end of k loop
+
+```
+
+And here I calculate sd(y-yhat)
+
+```{r}
+sd(y-yhat)
+```
+
+The standard deviation turns out to be pretty close to the one for loess.
+Again, it is important to note this is SD for the normalized log10_cost.
+
+## c) Making a prediction for a new observation
+
+I convert the new patient's predictors to standardized format and use bestPPR to make a prediction.
+
+```{r}
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+# heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+# head(heart)
+
+## Let's try to standardize the input data
+ageMean = mean(heart$age)
+gendMean = mean(heart$gend)
+intvnMean = mean(heart$intvn)
+drugsMean = mean(heart$drugs)
+ervisMean = mean(heart$ervis)
+compMean = mean(heart$comp)
+comorbMean = mean(heart$comorb)
+durMean = mean(heart$dur)
+
+ageSD = sd(heart$age)
+gendSD = sd(heart$gend)
+intvnSD = sd(heart$intvn)
+drugsSD = sd(heart$drugs)
+ervisSD = sd(heart$ervis)
+compSD = sd(heart$comp)
+comorbSD = sd(heart$comorb)
+durSD = sd(heart$dur)
+
+ageNew = (59-ageMean)/ageSD
+gendNew = (0-gendMean)/gendSD
+intvnNew =(10-intvnMean)/intvnSD
+drugsNew = (0-drugsMean)/drugsSD
+ervisNew = (3-ervisMean)/ervisSD
+compNew = (0-compMean)/compSD
+comorbNew = (4-comorbMean)/comorbSD
+durNew = (300-durMean)/durSD
+
+response = as.data.frame(t(c(ageNew, gendNew,intvnNew,drugsNew,ervisNew,compNew,comorbNew,durNew)))
+names(response) <- names(heart)[1:8]
+
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart[,c(1:8)] = scale(heart[,c(1:8)]) # Standardizing the predictor variables!
+heart[9] = (heart[9] - min(heart[9]))/(max(heart[9])-min(heart[9])) # Apley appears to be normalizing the response variable in his notes
+heart <- as.data.frame(heart)
+# head(heart)
+```
+
+The value I get is for the normalized log10_cost:
+
+```{r}
+predict(bestPPR, response)
+```
+
+This means that the actual predicted value for log10_cost is:
+
+```{r}
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+
+# Finally, we need to 'denormalize' the result i.e. the log10_cost response variable used to be normalized to be in the range [0,1]
+# The prediction is ~.75, which I now convert to the original scale of the log10_cost variable.
+(predict(bestPPR, response))*(max(heart[9])-min(heart[9]))+min(heart[9])
+```
+
+In actual dollar terms that is 10^3.510637 :
+```{r}
+10^3.510637 
+```
+
+PPR predicts a bit of a higher cost for our new observation.
+
+# Problem 5
+
+Importing in relevant data
+
+```{r q5_data}
+########### QUESTION 5 begins here ################### 
+# loading data for question 5
+fgl = read_excel('data.xls', sheet = 'FGL data')
+fgl = fgl[,-1]
+# Defining the binary response 
+z<- (fgl$type == "WinF") | (fgl$type == "WinNF")
+y<-as.character(fgl$type)
+y[z]<-"Win"; y[!z]<-"Other"
+y[y == "Win"]<-1;y[y == "Other"]<-0;
+fgl<-data.frame(fgl,"type01"=as.numeric(y))  #also add a binary numeric response column
+fgl = fgl[,-10]
+fgl[,c(1:9)] = scale(fgl[,c(1:9)]) # Standardizing the data
+fgl = as.data.frame(fgl)
+head(fgl)
+```
+
+## a) - Using CV to find the best K for this classification task
+
+I will repurpose the CV Function from problem 1 to do 10 initializations of 10-fold CV
+and return the misclassification rate for each initialization for both models
+as well as the average misclassification rate across all initializations.
+
+```{r}
+set.seed(42)
+### Will use this function repeatedly to find the best K
+classificationCV_2KNN <- function(K1, K2){
+  Nrep<-10 # number of replicates of CV
+  K<-10 
+  n.models = 2 #number of different models to fit
+  n=nrow(fgl)
+  y<-fgl$type01
+  yhat=matrix(0,n,n.models) 
+  misclass<-matrix(0,Nrep,n.models)
+  for (j in 1:Nrep) {
+    Ind<-CVInd(n,K)
+    for (k in 1:K) {
+       train<-as.matrix(fgl[-Ind[[k]],1:9]) # Training data for Predictors
+       test<-as.matrix(fgl[Ind[[k]],1:9])  # Test data for Predictors
+       ytrain<-fgl[-Ind[[k]],9] # The response variable for the Training data
+       
+       # Model 1
+       out<-ann(train,test,K1,verbose=F) # Train the model; i.e. find the nearest neighbours in the train set for each point in the test set
+       ind<-as.matrix(out$knnIndexDist[,1:K1]) # These are the nearest neighbours
+       # Look at the training data at the indices of the closest neighbours
+       # Then compute the mean and return 1 if it's greater than .5 (which means there are more window glasses than Other glasses
+       # Else return 0, which means Other type of glass (not Window) as the prediction for the k-th fold
+
+       yhat[Ind[[k]],1]<-apply(ind,1,function(x) ifelse(mean(ytrain[x])>=.5,1,0)) 
+       # Model 2
+       out<-ann(train,test,K2,verbose=F)
+       ind<-as.matrix(out$knnIndexDist[,1:K2])
+       yhat[Ind[[k]],2]<-apply(ind,1,function(x) ifelse(mean(ytrain[x])>=.5,1,0)) 
+    } #end of k loop
+    misclass[j,]=apply(yhat,2,function(x) sum(y != x)/n)
+  } #end of j loop
+  misclassAve<- apply(misclass,2,mean) #averaged CV misclass rate
+  return(list(misclass, misclassAve))
+}
+
+classificationCV_2KNN(5,10)
+```
+
+It appears that K=5 gives a lower misclass rate so it's doing better than K=10
+
+5 & 8? -> 5 does better
+
+```{r}
+classificationCV_2KNN(5,8)
+```
+
+5 & 6? -> 5
+
+```{r}
+classificationCV_2KNN(5,6)
+```
+
+4 & 5? -> 4
+
+```{r}
+classificationCV_2KNN(4,5)
+```
+
+3 & 4? -> 4 does better!
+
+```{r}
+classificationCV_2KNN(3,4)
+```
+
+I conclude that K=4 is the best model for this dataset.
+
+## b) - Using CV to find the best GAM for this classification task
+
+GAM doesn't have any tuning parameters (that I have to tune; the function tunes span for each smoother)
+
+```{r}
+# fgl
+bestGAMfgl<-gam(type01~s(RI) + s(Na) + s(Mg) + s(Al) + s(Si) + s(K) + s(Ca) + s(Ba) + s(Fe), data=fgl, family=binomial(), sp=c(-1,-1,-1,-1,-1,-1,-1,-1,-1)) 
+summary(bestGAMfgl)
+```
+```{r}
+bestGAMfgl$sp
+```
+
+Here are the predictions from the model in binary format:
+
+```{r}
+# Initialize empty vector of length 214
+bestGAMfgl01predictions = c(rep(0,nrow(fgl)))
+# "Binarizing" the predictions
+# NOTE: I am using type = 'response' in the prediction call so I get probabilities and NOT log-odds
+for (i in 1:length(predict(bestGAMfgl))){
+  if (predict(bestGAMfgl,type = 'response')[i]>=.5){
+    bestGAMfgl01predictions[i] = 1
+  } else {
+    bestGAMfgl01predictions[i] = 0
+  }
+}
+# predict(bestGAMfgl)
+bestGAMfgl01predictions
+```
+
+And finally I calculate the misclassification rate (on the entire dataset which is the training data)
+
+```{r}
+sum(bestGAMfgl01predictions != fgl$type01)/nrow(fgl)
+```
+
+I can also try to estimate this with CV (which is definitely a better idea than looking at training misclassification rate, which as expected is quite low)
+I will reduce the number of folds to 3 so that each fold has enough observations for the smoothers to work properly. Will initialize 3 times.  
+
+```{r}
+Nrep<-3 # number of replicates of CV
+K<- 3 # Reducing the number of folds so that each fold has enough observations for the smoothers to work properly  
+n.models = 1 #number of different models to fit
+n=nrow(fgl)
+y<-fgl$type01
+yhat=matrix(0,n,n.models) 
+misclass<-matrix(0,Nrep,n.models)
+for (j in 1:Nrep) {
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+     train<-fgl[-Ind[[k]],] # Training data 
+     test<-fgl[Ind[[k]],1:9]  # Test data for Predictors
+     out<-gam(type01~s(RI) + s(Na) + s(Mg) + s(Al) + s(Si) + s(K) + s(Ca) + s(Ba) + s(Fe), data=train, family=binomial(), sp=c(-1,-1,-1,-1,-1,-1,-1,-1,-1))  # Train the model
+     # Numeric predictions
+     numPredictions = predict(out,test,type = 'response')
+     
+     binaryPredictions = c(rep(0,nrow(test)))
+      # "Binarizing" the predictions
+      for (p in 1:length(numPredictions)){
+        if (numPredictions[p]>=.5){
+          binaryPredictions[p] = 1
+        } else {
+          binaryPredictions[p] = 0
+        }
+      }
+     yhat[Ind[[k]],1] = binaryPredictions
+  } #end of k loop
+  misclass[j,] =  sum(y != yhat)/n
+} #end of j loop
+  misclassAve<- apply(misclass,2,mean) #averaged CV misclass rate
+  print(misclass)
+  print(misclassAve)
+```
+
+The first 3 values are the average misclassification rate for each of the 3 initializations of 3-fold CV.
+The final is the average misclassification rate. We can see that the GAM does much poorer than the KNN, which had ~ 50% misclass. rate.
+
+## c) Comparing KNN, GAM, and NN
+
+The Neural Network in HW 2 for the fgl data had a misclassification rate of 26.8% (in my solution while in the solution provided on canvas it is 27.7%).
+Apparently, our GAM model does  a bit better with a 21.8% misclassification.
+The KNN model didn't do very well. It had around 50% misclassification rate (from when I was fitting using Cross-Validation.)
+
+So, overall, the GAM appears to be the best model out of the three.
+
+# Problem 6 - Boosted Tree
+
+Importing data
+
+```{r}
+########### QUESTION 6 begins here ################### 
+# loading data for question 6
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+# heart[,c(1:8)] = scale(heart[,c(1:8)]) # I THINK I DON'T NEED TO STANDARDIZE DATA HERE # Standardizing the predictor variables!
+heart <- as.data.frame(heart)
+head(heart)
+```
+
+```{r}
+library(gbm)
+# Fit gbm model
+gbm1 <- gbm(log10_cost~., data=heart, var.monotone=rep(0,8), distribution="gaussian", n.trees=5000, shrinkage=0.1, interaction.depth=3, bag.fraction = .5, train.fraction = 1, n.minobsinnode = 10, cv.folds = 10, keep.data=TRUE, verbose=F)
+```
+
+```{r}
+bestM = gbm.perf(gbm1, method = 'cv')
+```
+
+Looking at the 60th to 70th CV error, I see that indeed the error at the 64th iteration is lowest
+
+```{r}
+bestM
+gbm1$cv.error[60:70]
+```
+
+Below I calculate the R-squared for the Boosted Tree
+
+```{r}
+1-gbm1$cv.error[bestM]/var(heart$log10_cost)
+```
+
+
+## b) - Variable Importance
+
+```{r}
+summary(gbm1,n.trees=bestM)
+```
+
+The variable importance bar chart & accompanying table show us similar conclusions as before - intvn is the most important variable, followed by dur, comorb, and ervis.
+This is supported based on the partial dependence plots below.
+In fact, the intvn plot looks much like the plot from the GAM model.
+
+```{r}
+par(mfrow = c(2,4))
+plot(gbm1, i.var = 3, n.trees = bestM)
+plot(gbm1, i.var = 7, n.trees = bestM)
+plot(gbm1, i.var = 8, n.trees = bestM)
+```
+
+I"m just curious to see if there is an interaction b/w duration and intvn and there doesn't appear to be one
+based on the pairwise marginal plot below.
+
+```{r}
+par(mfrow=c(1,1))
+plot(gbm1, i.var = c(3,8), n.trees = bestM)
+```
+
+## c) - Making a prediction
+
+First I make a vector with the predictor variables
+
+```{r}
+predVar = t(c(59,0,10,0,3,0,4,300))
+predVar = as.data.frame((predVar))
+names(predVar) = names(heart[,1:8])
+predVar
+```
+
+The log10_cost prediction is:
+
+```{r}
+prediction = predict(gbm1, predVar, n.trees = bestM)
+prediction
+```
+
+Which translates to teh following in absolute dollar amount
+
+```{r}
+10^3.446347
+```
+
+
+After speaking with Suraj during the lab, I will try to tune shrinkage & number of trees together via Grid Search in the caret package.
+I will try trees between 10 and 1000, with shrinkage between .001 and .1 in increments of .005. This means ~ 99,100 trees.
+
+```{r}
+# gbm1 <- gbm(log10_cost~., data=heart, var.monotone=rep(0,8), distribution="gaussian", n.trees=5000, shrinkage=0.1, interaction.depth=3, bag.fraction = .5, train.fraction = 1, n.minobsinnode = 10, cv.folds = 10, keep.data=TRUE, verbose=F)
+library(caret)
+# tune.shrinkage = c(.001, .005, .01, .025, .05, .075, .01)
+tune.shrinkage = seq(.001,.1,.005)
+tune.M = seq(10, 1000, 1)
+gbm.tuningParameters = expand.grid(tune.shrinkage, tune.M)
+gbm.tuningParameters = data.frame(gbm.tuningParameters)
+gbm.tuningParameters['n.minobsinnode'] = rep(10, nrow(gbm.tuningParameters))
+gbm.tuningParameters['interaction.depth'] = rep(3,nrow(gbm.tuningParameters))
+names(gbm.tuningParameters) = c('shrinkage','n.trees','n.minobsinnode','interaction.depth')
+head(gbm.tuningParameters)
+options = trainControl(method = 'repeatedcv', number = 10, repeats = 1, summaryFunction = defaultSummary, verboseIter = F)
+gbm.cv = train(log10_cost ~ ., method = 'gbm', data = heart, trControl = options, tuneGrid  = gbm.tuningParameters, verbose = FALSE)
+gbm.cv$bestTune
+```
+
+The best results turn out to be n.trees = 59, shrinkage = .096. The number of trees is very similar to the previous answer, but the shrinkage is much smaller.
+I'll now refit the model with these optimal parameters/
+
+```{r}
+gbmCV <- gbm(log10_cost~., data=heart, var.monotone=rep(0,8), distribution="gaussian", n.trees=200, shrinkage=0.096, interaction.depth=3, bag.fraction = .5, train.fraction = 1, n.minobsinnode = 10, cv.folds = 10, keep.data=TRUE, verbose=F)
+```
+
+```{r}
+bestM = gbm.perf(gbmCV, method = 'cv')
+```
+
+```{r}
+bestM
+```
+
+Below is the R-squared for this bestM = 43
+
+```{r}
+1-gbmCV$cv.error[bestM]/var(heart$log10_cost)
+```
+
+The R-Squared for n.tree = 59 is below and is very close to the one above.
+Difference is probably due to cross-validation variance in samples.
+
+```{r}
+1-gbmCV$cv.error[59]/var(heart$log10_cost)
+```
+
+# Problem 7 - Random Forests
+## a) - Fitting a tree with mtry = 3 and ntree = 500
+
+```{r}
+########### QUESTION 7 begins here ################### 
+# loading data for question 7
+library(randomForest)
+heart = read_excel('data.xls', sheet = 'Ischemic Heart Dis.')
+heart['log10_cost'] = log10(heart[['cost']])
+heart =  heart[,-(1:2)] # Dropping the original cost column and the unique identifier
+heart <- as.data.frame(heart)
+head(heart)
+```
+
+```{r}
+# mtry: Number of variables randomly sampled as candidates at each split. 
+# It makes sense to try mtry = 3, since for regression the best is usually p/3, in this case 8/3
+# ntree: number of trees to grow
+myRF1 = randomForest(log10_cost~., data = heart, mtry = 3, ntree = 500)
+myRF1
+```
+
+I repeated the fitting multiple times and the value for % Var explained (R-squared) changes between 66.5 and 67.1
+Below I've printed the R-squared for 
+
+```{r}
+names(myRF1)
+myRF1$rsq[480:500]
+```
+
+## b) - Was ntree = 500 enough?
+
+I think 500 might be enough, particularly when I look at the below graph which shows the OOB error vs. the # of trees.
+THere doesn't appear to be a significant degrease after 400 trees.
+But fitting more trees is not very computationally expensive, so typically I would fit more, just to check what happens.
+
+```{r}
+plot(myRF1)
+```
+
+## c) - Variable importance
+
+```{r}
+myRF1$importance
+```
+
+Once again, intvn appears to be the most important variable, in agreement with the result from the Boosted Tree.
+The follow-up variables are also the same: dur, comorb, and ervis
+
+## d)
+
+Looking at the partial dependece plots I take intvn as an example and observe:
+- the relationship is not entirely linear; there is definitely some 'curvature' or 'non-linearity'
+- the y axis changes the most for intvn vs the otehr variables, which once again suggests intvn is the most influential variable
+THis is in line with both what we saw from the variable importance metrics above and the same as the boosted Tree.
+- Furthermore, the PD plot for the boosted tree and for the RF are very similar - both in shape and the values on the y axis.
+
+On another note:
+- drugs doesn't look lineart
+- age, within the domain of x values (the tick marks in the PD plot) does not appear linear; same for ervis
+
+```{r}
+par(mfrow = c(2,4))
+for (i in c(1:8)) partialPlot(myRF1, pred.data=heart, x.var = names(heart)[i], xlab = names(heart)[i], main=NULL) #creates "partial dependence" plots 
+
+```
+
+## e) Making a prediction for a new observation
+```{r}
+predVar = t(c(59,0,10,0,3,0,4,300))
+predVar = as.data.frame((predVar))
+names(predVar) = names(heart[,1:8])
+predVar
+```
+
+I make a prediction 
+```{r}
+predict(myRF1, predVar)
+```
+
+Which in absolute $ terms is:
+```{r}
+10^3.600718 
+```
+
+It appears much higher than the other models I've fit.
+
+## f)
+
+First I do mtry=1
+```{r}
+myRF2 = randomForest(log10_cost~., data = heart, mtry = 1, ntree = 500)
+myRF2
+```
+
+```{r}
+myRF3 = randomForest(log10_cost~., data = heart, mtry = 3, ntree = 500)
+myRF3
+```
+
+It appears that mtry=1 is much worse and mtry=2 is only a little worse than mtry=3
+
+What is mtry?
+mtry are the number of variables we randomly pick from all of hte variables we have when we are trying to determine what kind of split to make.
+The  steps to making a RF are:
+- Draw a bootstrap sample
+- Take a subset of variables for that bootstrap sample (of lenght = mtry)
+- Split the root node by whatever variable and value produces the greatest reduction in SSE (or gini index/deviance in classification setting)
+- Continue repeating the previous two steps until we reach a condition such as minimum observations in a node or maximum tree size (depth)
+
+The mtry parameter allows us to control how many variables will be considered at each step when trying to grow a tree i.e. splitting a leaf node.
+
+## g) - Model comparison
+R-squared:  
+Random Forest: 67.18%  
+Boosted Tree: 69.08% (From the CV GridSearch with Caret)  
+PPR: 67.08% (From the final call of pprCV function, when I was tuning nterms and found nterms = 1 to be the best )  
+Loess (Local Regression with deg = 2 and sp = .05): 83.51% ( From the final call of LoessCV, when I was tuning the degree parameter)  
+GAM: I don't have an R-squared, because I didn't use CV for GAM (the function optimized the parameters)  
+KNN (K=8): 58.68% (from final call of LOOCV function)   
+Neural Network: 57.03%  
+Regression Tree: 63.5%  
+  
+Overall, it looks like Loess did the best, followed closely by the Boosted Tree.
+
+# Appendix
+
+This section is to be used for including your R code. The following lines of code will take care of it. Please make sure to comment your code appropriately - in particular, demarcating codes belonging to different questions. Among other things, it will be easier for you to debug your own code.
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
+

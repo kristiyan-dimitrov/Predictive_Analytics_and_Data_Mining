@@ -1,0 +1,487 @@
+---
+title: "ModellingAdaBoost"
+author: "Kristiyan Dimitrov"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+ CVInd <- function(n,K) { # n is sample size; K is number of parts; # returns K-length list of indices for each part
+      m<-floor(n/K) #approximate size of each part
+      r<-n-m*K
+      I<-sample(n,n) #random reordering of the indices
+      Ind<-list() #will be list of indices for all K parts
+      length(Ind)<-K
+      for (k in 1:K) {
+        if (k <= r) kpart <- ((m+1)*(k-1)+1):((m+1)*k)
+        else kpart<-((m+1)*r+m*(k-r-1)+1):((m+1)*r+m*(k-r))
+        Ind[[k]] <- I[kpart] #indices for kth part of data
+      }
+      Ind
+    }
+```
+
+
+## Import Data
+
+```{r}
+# install.packages('fastAdaboost')
+library(fastAdaboost)
+library(gbm)
+# install.packages('WeightedROC')
+library(WeightedROC)
+library(pROC)
+```
+
+Initializing the data & Setting factors
+```{r}
+library(caret) # For Cross Validation Hyperparameter tuning
+library(scales)
+library(tidyverse)
+library(dplyr)
+#load data 
+crash = read.csv("crash_clean31020.csv", stringsAsFactors = TRUE)
+crash = as_tibble(crash)
+#normalizing numeric variables/factorizing whatever wasn't
+crash$ROAD_DEFECT = as.factor(crash$ROAD_DEFECT)
+crash$CRASH_HOUR = as.factor(crash$CRASH_HOUR)
+crash$CRASH_DAY_OF_WEEK = as.factor(crash$CRASH_DAY_OF_WEEK)
+crash$CRASH_MONTH = as.factor(crash$CRASH_MONTH)
+crash$isHoliday = as.factor(crash$isHoliday)
+crash$isRush = as.factor(crash$isRush)
+crash$INJURIES_TOTAL_BINARY = as.factor(crash$INJURIES_TOTAL_BINARY)
+crash = crash %>%
+  select(-c("LATITUDE", "LONGITUDE", "NUM_UNITS", "PRIM_CONTRIBUTORY_CAUSE", "REPORT_TYPE",
+            "INJURIES_NO_INDICATION", "X", "FIRST_CRASH_TYPE")) %>% 
+              as.data.frame()
+```
+
+```{r}
+str(crash)
+```
+
+```{r}
+adaBoost1 = adaboost(INJURIES_TOTAL_BINARY ~ . , data = crash, nIter = 2)
+summary(adaBoost1)
+```
+
+```{r}
+names(adaBoost1)
+```
+
+```{r}
+adaBoost1$weights
+```
+
+```{r}
+predictions1 = predict(adaBoost1, crash)
+```
+
+```{r}
+confusionMatrix(as.numeric(crash$INJURIES_TOTAL_BINARY)-1, as.numeric(predictions1$class)-1)
+matrix(percent(confusionMatrix(as.numeric(crash$INJURIES_TOTAL_BINARY)-1, as.numeric(predictions1$class)-1) / nrow(crash)), nrow = 2)
+```
+
+# Tune AdaBoost Object
+Takes too long with nIter between 2 and 10.
+Will try with 2,5, and 8.
+Will also take only 100k rows
+
+```{r}
+set.seed(1)
+crashSubset = crash[sample(nrow(crash), 100000),]
+str(crashSubset)
+```
+
+
+```{r}
+?train
+nIterTune = c(seq(2,10,3))
+adaBoostTune = expand.grid(nIterTune, 'Adaboost.M1')
+names(adaBoostTune) = c('nIter', 'method')
+adaBoostTune
+```
+
+```{r}
+# CV OPTIONS
+adaBoostControl = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction = defaultSummary, verboseIter = T)
+# RUN CV
+adaBoostCV= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControl, tuneGrid = adaBoostTune, scale = F)
+```
+
+nIter = 5 is the best one! Will try 4,5,6
+
+```{r}
+nIterTune = c(4,5,6)
+adaBoostTune = expand.grid(nIterTune, 'Adaboost.M1')
+names(adaBoostTune) = c('nIter', 'method')
+adaBoostTune
+```
+
+```{r}
+# CV OPTIONS
+adaBoostControl2 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction = defaultSummary, verboseIter = T)
+# RUN CV
+adaBoostCV2= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControl2, tuneGrid = adaBoostTune, scale = F)
+```
+
+```{r}
+names(adaBoostCV2)
+```
+
+```{r}
+adaBoostCV2$finalModel
+```
+
+```{r}
+adaBoostCV2$results
+```
+
+The best model has nIter = 4.
+
+Will try to fit on entire dataset now.
+
+```{r}
+adaBoostBest = adaboost(INJURIES_TOTAL_BINARY ~ . , data = crash, nIter = 4)
+```
+
+
+```{r}
+adaBoostBest$weights
+sum(adaBoostBest$weights)
+```
+
+```{r}
+predictionsBest = predict(adaBoostBest, crash)
+```
+
+```{r}
+predictionsBest$class
+predictionsBest$prob
+```
+
+```{r}
+head(predictionsBest$prob)
+```
+
+```{r}
+M = confusionMatrix(as.numeric(crash$INJURIES_TOTAL_BINARY)-1, as.numeric(predictionsBest$class)-1)
+Colnms <- c('Actual_No','Actual_Yes')
+Rownms <- c('Pred_No','Pred_Yes')
+colnames(M) = Colnms
+rownames(M) = Rownms
+Mpercent = matrix(percent(confusionMatrix(as.numeric(crash$INJURIES_TOTAL_BINARY)-1, as.numeric(predictionsBest$class)-1) / nrow(crash)), nrow = 2)
+colnames(Mpercent) = Colnms
+rownames(Mpercent) = Rownms
+M
+Mpercent
+```
+
+```{r}
+sum(as.numeric(crash$INJURIES_TOTAL_BINARY)-1)
+```
+
+
+# Let's try DOWNSAMPLING
+
+```{r}
+nIterTune = c(4,5,6)
+adaBoostTune = expand.grid(nIterTune, 'Adaboost.M1')
+names(adaBoostTune) = c('nIter', 'method')
+adaBoostTune
+```
+
+```{r}
+# Need to transform the labelling to have the training work properly
+levels(crashSubset$INJURIES_TOTAL_BINARY) <- c('No','Yes')
+head(crashSubset$INJURIES_TOTAL_BINARY)
+```
+
+```{r}
+# CV OPTIONS
+adaBoostControlSampling1 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction =twoClassSummary, verboseIter = T, sampling = 'down', classProbs = TRUE)
+# RUN CV
+adaBoostCVSampling1= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControlSampling1, tuneGrid = adaBoostTune, scale = F, metric = 'ROC')
+```
+
+```{r}
+names(adaBoostCVSampling1)
+```
+
+```{r}
+adaBoostCVSampling1$bestTune
+```
+
+ROC in the below should be AUC of the ROC
+
+```{r}
+adaBoostCVSampling1$results
+```
+
+
+```{r}
+adaBoostCVSampling1$resample
+```
+
+```{r}
+adaBoostCVSampling1$finalModel
+```
+
+Let's try some more nIter values
+
+```{r}
+nIterTune = c(6, 8 , 10)
+adaBoostTune = expand.grid(nIterTune, 'Adaboost.M1')
+names(adaBoostTune) = c('nIter', 'method')
+adaBoostTune
+```
+
+
+```{r}
+# CV OPTIONS
+adaBoostControlSampling2 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction =twoClassSummary, verboseIter = T, sampling = 'down', classProbs = TRUE)
+# RUN CV
+adaBoostCVSampling2= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControlSampling2, tuneGrid = adaBoostTune, scale = F, metric = 'ROC')
+```
+ I get that nIter = 8 has the best ROC!
+ Note below that nIter = 8 has much higher sensitivity, but much lower specificity.
+ These are the avg. ROC-CV results for each hyperparameter set.
+ 
+```{r}
+adaBoostCVSampling2$results
+```
+ 
+These are the CV results for the best model!
+ 
+```{r}
+adaBoostCVSampling2$resample
+```
+ 
+ 
+ What if I remove metric = 'ROC'?
+ 
+```{r}
+?train
+# CV OPTIONS
+adaBoostControlSampling3 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction =twoClassSummary, verboseIter = T, sampling = 'down', classProbs = TRUE)
+# RUN CV
+adaBoostCVSampling3= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControlSampling3, tuneGrid = adaBoostTune, scale = F)
+```
+ 
+ Ok, the above error message says that without metric = ROC, it will assume ROC by default (if in trainControl, I've specified twoClassSummary). Let's try and remove twoCaseSummary and see how standard default options with downsampling work.
+ 
+Note, I also removed classProbs = TRUE  from trainControl()
+ 
+```{r}
+# CV OPTIONS
+adaBoostControlSampling4 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction =defaultSummary, verboseIter = T, sampling = 'down')
+# RUN CV
+adaBoostCVSampling4= train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControlSampling4, tuneGrid = adaBoostTune, scale = F)
+```
+
+```{r}
+adaBoostCVSampling4$results
+```
+
+I get that nIter = 8 is also the best option w.r.t. Accuracy!
+
+```{r}
+sum(adaBoostCVSampling4$trainingData$.outcome == 'Yes')
+```
+
+```{r}
+adaBoostCVSampling4$resample
+```
+
+```{r}
+O_s = 1 # Because we have 1:1 balanced data
+convertProbability = function(x) {
+  return((x*odds1 / (O_s-x*(O_s-odds1))))
+}
+```
+
+```{r}
+crash
+```
+
+```{r}
+# THESE ARE THE BEST PARAMETERS (nIter = 8, method = Adaboost.M1)
+bestTune = adaBoostTune[2,]
+# CV OPTIONS - IN FACT I'M NOT REALLY DOING CV, I JUST NEED TO USE THE DOWNSAMPLING TO GET A MODEL ON DOWNSAMPLED DATA
+adaBoostBestControlSampling = trainControl(method = 'none', summaryFunction = defaultSummary, verboseIter = T, sampling = 'down')
+# RUN CV
+adaBoostBestTune = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'adaboost', trControl = adaBoostBestControlSampling, tuneGrid = bestTune, scale = F)
+```
+
+```{r}
+predict(adaBoostBestTune$finalModel , newdata = adaBoostBestTune$trainingData)
+```
+
+```{r}
+downSample(crash[,-ncol(crash)], crash[,ncol(crash)])
+```
+
+```{r}
+testAdaBoostSampling = adaboost(Class ~. , data = downSample(crash[,-ncol(crash)], crash[,ncol(crash)]), nIter = 8)
+```
+
+```{r}
+# Testing the probability adjustment on the predictions from the sampling model
+testPredictionsSampling = predict(testAdaBoostSampling, newdata = crash)
+testPredictionsSampling$prob[,2] # THese are the predicted probabilitis for the positive class
+convertedProbabilities = sapply(testPredictionsSampling$prob[,2] , convertProbability)
+
+?roc
+```
+
+
+ # Let's try cross validation to determine what p* will give us the best FNR (Step 2)
+ 
+```{r}
+
+pStar = c(.02, .05, .1, .2, .4, .6)
+
+for (p in pStar) {
+  Ind<-CVInd(n,K)
+  for (k in 1:K) {
+     train<-fgl[-Ind[[k]],] # Training data 
+     test<-fgl[Ind[[k]],1:9]  # Test data for Predictors
+     out<-gam(type01~s(RI) + s(Na) + s(Mg) + s(Al) + s(Si) + s(K) + s(Ca) + s(Ba) + s(Fe), data=train, family=binomial(), sp=c(-1,-1,-1,-1,-1,-1,-1,-1,-1))  # Train the model
+     # Numeric predictions
+     numPredictions = predict(out,test,type = 'response')
+     
+     binaryPredictions = c(rep(0,nrow(test)))
+      # "Binarizing" the predictions
+      for (p in 1:length(numPredictions)){
+        if (numPredictions[p]>=.5){
+          binaryPredictions[p] = 1
+        } else {
+          binaryPredictions[p] = 0
+        }
+      }
+     yhat[Ind[[k]],1] = binaryPredictions
+  } #end of k loop
+  misclass[j,] =  sum(y != yhat)/n
+} #end of j loop
+```
+ 
+
+```{r}
+# Number of 1's
+sum(crash$INJURIES_TOTAL_BINARY == 1)
+# Probability of a 1
+prob1 = sum(crash$INJURIES_TOTAL_BINARY == 1) / nrow(crash); prob1
+O = prob1/(1-prob1); O
+```
+
+
+```{r}
+# THIS IS THE BEST MODEL BASED ON SUBSET OF DATA
+# Let's train on the entire dataset
+```
+# CV INDICES
+
+```{r}
+set.seed(1)
+Ind1 = CVInd()
+```
+
+
+BELOW NOT USED OR DONE
+
+```{r}
+# CV OPTIONS
+adaBoostControlSampling5 = trainControl(method = 'repeatedcv', number = 10, repeats = 5, summaryFunction =twoClassSummary, verboseIter = T, sampling = 'down', classProbs = T)
+# RUN CV
+adaBoostCVSampling5 = train(INJURIES_TOTAL_BINARY ~ . , data = crashSubset, method = 'adaboost', trControl = adaBoostControlSampling5, tuneGrid = adaBoostTune, scale = F, metric = 'ROC')
+```
+
+```{r}
+adaBoostCVSampling5
+nrow(crash)
+```
+
+
+
+```{r}
+
+```
+
+
+
+
+```{r}
+
+modifiedY = crash$INJURIES_TOTAL_BINARY
+levels(modifiedY) <- c('No','Yes')
+```
+
+
+
+
+
+### APPENDIX
+
+```{r}
+# CHecked if ROC function could be useful
+testPredictionsSampling$class
+as.numeric(testPredictionsSampling$class)-1
+
+testROC = roc(crash$INJURIES_TOTAL_BINARY, as.numeric(testPredictionsSampling$class)-1, ret = 'all_coords', plot = T, ci.thresholds(pStar))
+testROC
+```
+
+
+```{r}
+modelLookup('adaboost')
+```
+
+
+```{r}
+# I think the method values are 'Adaboost.M1' & 'Real adaboost'
+# A bit about the difference between the two: https://www.semanticscholar.org/paper/A-Real-generalization-of-discrete-AdaBoost-Nock-Nielsen/16a8f4a2741c43bfc0e74abf4562c039e874d8cc
+# I will use 'Adaboost.M1'
+getModelInfo('adaboost')
+```
+
+# FROM TS2
+- I fit an adaBoost with 500 trees on the entire dataset.
+The first 312 trees have importance > .01
+The first 146 trees have importance > .02
+The first 51 trees have importance > .05
+The first 20 trees have importance > .1
+
+```{r}
+# detach("package:NMOF", unload=TRUE)
+```
+
+
+```{r}
+costTune = c(seq(.01,.3,.1)) # 150 values for Cost
+scaleTune = 1
+degreeTune= c(2,3,4)
+
+polySVM_parameters1 = expand.grid(costTune, scaleTune, degreeTune) #, LossTune)
+names(polySVM_parameters1) <- c('C', 'scale', 'degree')
+polySVM_parameters1
+
+polySVM_options1 = trainControl(method = 'repeatedcv', number = 3, repeats = 1, summaryFunction = defaultSummary, verboseIter = T)
+```
+
+
+```{r}
+crash = as.data.frame(crash[1:20000,])
+table(crash$INJURIES_TOTAL_BINARY)
+```
+
+```{r}
+polySVM_2 = train(INJURIES_TOTAL_BINARY ~ . , data = crash, method = 'svmPoly', trControl = polySVM_options1, tuneGrid = polySVM_parameters1, scale = F)
+```
+
+```{r}
+method = 'adaboost'
+```
